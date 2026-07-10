@@ -21,6 +21,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+import json
+from datetime import datetime
+
 # Directories
 WORKSPACE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_DIR = os.path.join(WORKSPACE_DIR, "uploads")
@@ -28,16 +31,45 @@ OUTPUT_DIR = os.path.join(WORKSPACE_DIR, "outputs")
 STATIC_DIR = os.path.join(WORKSPACE_DIR, "static")
 TEMPLATES_DIR = os.path.join(STATIC_DIR, "templates")
 ASSETS_DIR = os.path.join(STATIC_DIR, "assets")
+LIBRARY_DIR = os.path.join(STATIC_DIR, "library")
 
-for directory in [UPLOAD_DIR, OUTPUT_DIR, STATIC_DIR, TEMPLATES_DIR, ASSETS_DIR]:
+for directory in [UPLOAD_DIR, OUTPUT_DIR, STATIC_DIR, TEMPLATES_DIR, ASSETS_DIR, LIBRARY_DIR]:
     os.makedirs(directory, exist_ok=True)
 
 # Mount static files
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.mount("/outputs", StaticFiles(directory=OUTPUT_DIR), name="outputs")
+app.mount("/library", StaticFiles(directory=LIBRARY_DIR), name="library")
 
 # Global task status dictionary
 tasks_status: Dict[str, Dict[str, Any]] = {}
+
+DB_PATH = os.path.join(WORKSPACE_DIR, "metadata.json")
+
+def load_db() -> Dict[str, Any]:
+    if not os.path.exists(DB_PATH):
+        return {"assets": {}, "videos": {}}
+    try:
+        with open(DB_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {"assets": {}, "videos": {}}
+        
+def save_db(db: Dict[str, Any]):
+    try:
+        with open(DB_PATH, "w", encoding="utf-8") as f:
+            json.dump(db, f, indent=4, ensure_ascii=False)
+    except Exception as e:
+        print(f"Error saving metadata DB: {e}")
+
+def get_file_type(filename: str) -> str:
+    ext = os.path.splitext(filename)[1].lower()
+    if ext in [".mp3", ".wav", ".aac", ".ogg", ".m4a"]:
+        return "audio"
+    elif ext in [".mp4", ".mov", ".avi", ".mkv", ".webm"]:
+        return "video"
+    else:
+        return "image"
 
 def update_task_progress(task_id: str, progress: int, message: str, status: str = "processing"):
     if task_id in tasks_status:
@@ -45,13 +77,46 @@ def update_task_progress(task_id: str, progress: int, message: str, status: str 
         tasks_status[task_id]["message"] = message
         tasks_status[task_id]["status"] = status
 
+
+def download_audio_asset(url: str, dest_path: str):
+    """Downloads a royalty-free audio file from the web, with bot-blocking user agent headers."""
+    import urllib.request
+    if os.path.exists(dest_path):
+        return
+    try:
+        print(f"Downloading royalty-free audio from {url} to {dest_path}...")
+        req = urllib.request.Request(
+            url, 
+            headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+        )
+        with urllib.request.urlopen(req, timeout=20) as response:
+            with open(dest_path, "wb") as f:
+                f.write(response.read())
+        print(f"Downloaded {dest_path} successfully!")
+    except Exception as e:
+        print(f"Failed to download {url}: {e}")
+
+
 # Startup events
 @app.on_event("startup")
 async def startup_event():
     # Pre-generate preview videos programmatically on start
     print("Initializing system assets and default preview videos...")
     
-    # Generate ambient/tech/cinematic synth files for user selections
+    # 1. Asynchronously download royalty-free background music tracks
+    urls = {
+        "upbeat_electro.mp3": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+        "chill_vibes.mp3": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
+        "acoustic_peace.mp3": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3"
+    }
+    
+    loop = asyncio.get_event_loop()
+    for filename, url in urls.items():
+        dest = os.path.join(ASSETS_DIR, filename)
+        if not os.path.exists(dest):
+            loop.run_in_executor(None, download_audio_asset, url, dest)
+            
+    # 2. Generate ambient/tech/cinematic synth files for user selections
     music_tracks = {
         "ambient.mp3": lambda t: np.sin(2 * np.pi * 220 * t) * 0.4 + np.sin(2 * np.pi * 275 * t) * 0.3,
         "tech.mp3": lambda t: np.sin(2 * np.pi * 440 * (t % 0.25 < 0.1) * t) * 0.3 + np.sin(2 * np.pi * 880 * (t % 0.25 < 0.05) * t) * 0.2,
@@ -72,7 +137,7 @@ async def startup_event():
             except Exception as e:
                 print(f"Failed to generate synth {filename}: {e}")
                 
-    # Initialize templates
+    # 3. Initialize templates
     try:
         video_processor.generate_default_previews(TEMPLATES_DIR, ASSETS_DIR)
     except Exception as e:
@@ -84,6 +149,43 @@ async def read_root():
 
 @app.get("/api/templates")
 async def get_templates():
+    # Dynamically scan static/assets for mp3 files
+    mp3_options = []
+    if os.path.exists(ASSETS_DIR):
+        for f in os.listdir(ASSETS_DIR):
+            if f.endswith(".mp3"):
+                name_without_ext = os.path.splitext(f)[0]
+                label = name_without_ext.replace("_", " ").title()
+                
+                custom_labels = {
+                    "upbeat_electro": "輕快動感電音 (推薦)",
+                    "chill_vibes": "放鬆律動音樂 (推薦)",
+                    "acoustic_peace": "溫馨和平吉他 (推薦)",
+                    "ambient": "靈動氛圍音樂 (內建合成)",
+                    "tech": "科技感電子樂 (內建合成)",
+                    "cinematic": "磅礡電影音效 (內建合成)",
+                    "default_audio": "預設簡短提示音 (內建合成)"
+                }
+                
+                display_label = custom_labels.get(name_without_ext, label)
+                mp3_options.append({"value": f, "label": display_label})
+                
+    # Sort options to put recommended ones first, then others
+    def sort_key(opt):
+        val = opt["value"]
+        if "upbeat" in val or "chill" in val or "acoustic" in val:
+            return (0, val)
+        elif "default_audio" in val:
+            return (2, val)
+        else:
+            return (1, val)
+            
+    mp3_options.sort(key=sort_key)
+    
+    # Add standard custom file upload option at the end
+    music_options = list(mp3_options) + [{"value": "custom", "label": "自行上傳音訊檔案 (.mp3/.wav)"}]
+    sound_options = list(mp3_options) + [{"value": "custom", "label": "自行上傳音效檔案 (.mp3/.wav)"}]
+    
     templates = [
         {
             "id": "slideshow",
@@ -92,12 +194,7 @@ async def get_templates():
             "preview_url": "/static/templates/slideshow_preview.mp4",
             "fields": [
                 {"name": "title", "label": "相簿標題文字", "type": "text", "placeholder": "例如：我的夏日度假回憶錄", "required": True},
-                {"name": "music", "label": "選擇背景音樂", "type": "select", "options": [
-                    {"value": "ambient.mp3", "label": "靈動氛圍音樂 (內建)"},
-                    {"value": "tech.mp3", "label": "科技感電子樂 (內建)"},
-                    {"value": "cinematic.mp3", "label": "磅礡電影音效 (內建)"},
-                    {"value": "custom", "label": "自行上傳音訊檔案 (.mp3/.wav)"}
-                ], "required": True},
+                {"name": "music", "label": "選擇背景音樂", "type": "select", "options": music_options, "required": True},
                 {"name": "images", "label": "上傳相片 (3-5 張)", "type": "file", "multiple": True, "accept": "image/*", "required": True},
                 {"name": "custom_audio", "label": "上傳自訂音樂檔案", "type": "file", "multiple": False, "accept": "audio/*", "required": False, "conditional": "music=custom"}
             ]
@@ -122,13 +219,24 @@ async def get_templates():
                 {"name": "brand_name", "label": "品牌/團隊名稱", "type": "text", "placeholder": "例如：極致影像工作室", "required": True},
                 {"name": "tagline", "label": "宣傳副標/標語", "type": "text", "placeholder": "例如：探索無限的創意可能", "required": False},
                 {"name": "logo", "label": "上傳 Logo 圖片 (建議透明背景 PNG)", "type": "file", "multiple": False, "accept": "image/*", "required": True},
-                {"name": "sound", "label": "選擇片頭音效", "type": "select", "options": [
-                    {"value": "cinematic.mp3", "label": "深沉電影氛圍 (內建)"},
-                    {"value": "tech.mp3", "label": "未來科技掃頻 (內建)"},
-                    {"value": "ambient.mp3", "label": "空靈聲效 (內建)"},
-                    {"value": "custom", "label": "自行上傳音效檔案 (.mp3/.wav)"}
-                ], "required": True},
+                {"name": "sound", "label": "選擇片頭音效", "type": "select", "options": sound_options, "required": True},
                 {"name": "custom_audio", "label": "上傳自訂音效檔案", "type": "file", "multiple": False, "accept": "audio/*", "required": False, "conditional": "sound=custom"}
+            ]
+        },
+        {
+            "id": "product_promo",
+            "name": "高質感商品宣傳短片 (Product Promo)",
+            "description": "15 秒直式高節奏商品推廣短片。套用滿版裁剪與微幅縮放動畫，搭配品牌、商品名及三大賣點文字，適合發佈於 TikTok/Instagram Reels/Shorts 進行商品宣傳。",
+            "preview_url": "/static/templates/promo_preview.mp4",
+            "fields": [
+                {"name": "brand_name", "label": "品牌/商店名稱", "type": "text", "placeholder": "例如：極致創意生活館", "required": True},
+                {"name": "product_name", "label": "商品名稱", "type": "text", "placeholder": "例如：北歐風極簡雙層玻璃杯", "required": True},
+                {"name": "highlight1", "label": "特色/亮點 1", "type": "text", "placeholder": "例如：耐高溫雙層防燙設計", "required": True},
+                {"name": "highlight2", "label": "特色/亮點 2", "type": "text", "placeholder": "例如：高透光食品級矽硼玻璃", "required": True},
+                {"name": "highlight3", "label": "特色/亮點 3", "type": "text", "placeholder": "例如：圓潤杯口 極致手感", "required": True},
+                {"name": "images", "label": "上傳商品圖片 (3-6 張)", "type": "file", "multiple": True, "accept": "image/*", "required": True},
+                {"name": "music", "label": "選擇背景音樂", "type": "select", "options": music_options, "required": True},
+                {"name": "custom_audio", "label": "上傳自訂音樂檔案", "type": "file", "multiple": False, "accept": "audio/*", "required": False, "conditional": "music=custom"}
             ]
         }
     ]
@@ -178,10 +286,30 @@ def run_render_in_thread(task_id: str, template_id: str, params: Dict[str, Any],
                 task_id, logo, brand_name, tagline, bg_music, output_path, update_task_progress
             )
             
+        elif template_id == "product_promo":
+            images = file_paths.get("images", [])
+            brand_name = params.get("brand_name", "")
+            product_name = params.get("product_name", "")
+            highlights = [
+                params.get("highlight1", ""),
+                params.get("highlight2", ""),
+                params.get("highlight3", "")
+            ]
+            music_selection = params.get("music", "tech.mp3")
+            
+            if music_selection == "custom":
+                bg_music = file_paths.get("custom_audio", None)
+            else:
+                bg_music = os.path.join(ASSETS_DIR, music_selection)
+                
+            video_processor.generate_product_promo_video(
+                task_id, images, brand_name, product_name, highlights, bg_music, output_path, update_task_progress
+            )
+            
         else:
             raise ValueError(f"Unknown template ID: {template_id}")
             
-        # Clean up temporary uploaded files
+        # Clean up temporary uploaded files (only those in uploads, not library)
         for key, val in file_paths.items():
             if isinstance(val, list):
                 for path in val:
@@ -197,6 +325,30 @@ def run_render_in_thread(task_id: str, template_id: str, params: Dict[str, Any],
         tasks_status[task_id]["progress"] = 100
         tasks_status[task_id]["message"] = "渲染成功！您的影片已就緒。"
         tasks_status[task_id]["output_url"] = f"/outputs/{output_filename}"
+        
+        # Record completed video in metadata database
+        try:
+            db = load_db()
+            template_names = {
+                "slideshow": "時尚相簿投影片",
+                "meme": "迷因短片",
+                "intro": "品牌 Logo 片頭",
+                "product_promo": "高質感商品宣傳短片"
+            }
+            t_name = template_names.get(template_id, "未命名影片")
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+            db["videos"][output_filename] = {
+                "filename": output_filename,
+                "name": f"{t_name} - {datetime.now().strftime('%m%d_%H%M')}",
+                "memo": f"使用「{t_name}」範本於 {timestamp} 製作完成。",
+                "url": f"/outputs/{output_filename}",
+                "template_id": template_id,
+                "created_at": timestamp
+            }
+            save_db(db)
+        except Exception as ex:
+            print(f"Error saving output video metadata: {ex}")
         
     except Exception as e:
         print(f"Error rendering task {task_id}: {e}")
@@ -243,27 +395,49 @@ async def start_render(
                 
             # Check if this key holds file upload(s)
             if hasattr(values[0], "filename"):
-                # Save uploaded files
+                # Save uploaded files persistently into LIBRARY_DIR
                 if len(values) > 1 or key == "images":
                     saved_paths = []
+                    db = load_db()
                     for idx, upload_file in enumerate(values):
                         if upload_file.filename:
                             ext = os.path.splitext(upload_file.filename)[1]
                             temp_filename = f"{task_id}_{key}_{idx}_{uuid.uuid4().hex[:6]}{ext}"
-                            temp_path = os.path.join(UPLOAD_DIR, temp_filename)
+                            temp_path = os.path.join(LIBRARY_DIR, temp_filename)
                             with open(temp_path, "wb") as buffer:
                                 shutil.copyfileobj(upload_file.file, buffer)
                             saved_paths.append(temp_path)
+                            
+                            db["assets"][temp_filename] = {
+                                "filename": temp_filename,
+                                "name": upload_file.filename,
+                                "memo": "",
+                                "type": get_file_type(temp_filename),
+                                "url": f"/library/{temp_filename}",
+                                "uploaded_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            }
+                    save_db(db)
                     file_paths[key] = saved_paths
                 else:
                     upload_file = values[0]
                     if upload_file.filename:
                         ext = os.path.splitext(upload_file.filename)[1]
                         temp_filename = f"{task_id}_{key}_{uuid.uuid4().hex[:6]}{ext}"
-                        temp_path = os.path.join(UPLOAD_DIR, temp_filename)
+                        temp_path = os.path.join(LIBRARY_DIR, temp_filename)
                         with open(temp_path, "wb") as buffer:
                             shutil.copyfileobj(upload_file.file, buffer)
                         file_paths[key] = temp_path
+                        
+                        db = load_db()
+                        db["assets"][temp_filename] = {
+                            "filename": temp_filename,
+                            "name": upload_file.filename,
+                            "memo": "",
+                            "type": get_file_type(temp_filename),
+                            "url": f"/library/{temp_filename}",
+                            "uploaded_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        }
+                        save_db(db)
             else:
                 # Text parameter
                 params[key] = values[-1]
@@ -286,6 +460,70 @@ async def get_status(task_id: str):
     if task_id not in tasks_status:
         raise HTTPException(status_code=404, detail="Task not found")
     return tasks_status[task_id]
+
+
+from pydantic import BaseModel
+
+class UpdateItem(BaseModel):
+    category: str  # "assets" | "videos"
+    id: str        # filename
+    name: str
+    memo: str
+
+@app.get("/api/library")
+async def get_library():
+    db = load_db()
+    assets_list = list(db.get("assets", {}).values())
+    videos_list = list(db.get("videos", {}).values())
+    
+    # Sort by date descending
+    assets_list.sort(key=lambda x: x.get("uploaded_at", ""), reverse=True)
+    videos_list.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+    
+    return {"assets": assets_list, "videos": videos_list}
+
+@app.post("/api/library/update")
+async def update_library_item(item: UpdateItem):
+    db = load_db()
+    category = item.category
+    item_id = item.id
+    
+    if category not in ["assets", "videos"]:
+        raise HTTPException(status_code=400, detail="Invalid category")
+        
+    if item_id not in db[category]:
+        raise HTTPException(status_code=404, detail="Item not found")
+        
+    db[category][item_id]["name"] = item.name
+    db[category][item_id]["memo"] = item.memo
+    save_db(db)
+    return {"status": "success"}
+
+@app.delete("/api/library/{category}/{item_id}")
+async def delete_library_item(category: str, item_id: str):
+    db = load_db()
+    if category not in ["assets", "videos"]:
+        raise HTTPException(status_code=400, detail="Invalid category")
+        
+    if item_id not in db[category]:
+        raise HTTPException(status_code=404, detail="Item not found")
+        
+    filename = db[category][item_id]["filename"]
+    if category == "assets":
+        file_path = os.path.join(LIBRARY_DIR, filename)
+    else:
+        file_path = os.path.join(OUTPUT_DIR, filename)
+        
+    if os.path.exists(file_path):
+        try:
+            os.remove(file_path)
+        except Exception as e:
+            print(f"Error removing file {file_path}: {e}")
+            
+    del db[category][item_id]
+    save_db(db)
+    return {"status": "success"}
+
 
 if __name__ == "__main__":
     import uvicorn

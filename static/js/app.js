@@ -356,6 +356,9 @@ document.addEventListener('DOMContentLoaded', () => {
         resultVideoPlayer.play();
         
         downloadBtn.href = videoUrl;
+        
+        // Refresh Media Center items
+        loadLibrary();
     }
 
     function resetWorkspaceUI() {
@@ -380,4 +383,187 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Run on startup
     loadTemplates();
+    loadLibrary();
+
+    // === Media Center Feature ===
+    const assetsGrid = document.getElementById('assetsGrid');
+    const videosGrid = document.getElementById('videosGrid');
+    const tabAssetsBtn = document.getElementById('tabAssetsBtn');
+    const tabVideosBtn = document.getElementById('tabVideosBtn');
+    
+    const editModal = document.getElementById('editModal');
+    const editForm = document.getElementById('editForm');
+    const editCategoryInput = document.getElementById('editCategory');
+    const editIdInput = document.getElementById('editId');
+    const editNameInput = document.getElementById('editName');
+    const editMemoInput = document.getElementById('editMemo');
+
+    let currentTab = 'assets'; // 'assets' | 'videos'
+
+    // Load items from API
+    async function loadLibrary() {
+        try {
+            const res = await fetch('/api/library');
+            if (!res.ok) throw new Error('無法取得媒體庫資料');
+            const data = await res.json();
+            renderLibrary(data);
+        } catch (error) {
+            console.error('媒體庫載入失敗:', error);
+        }
+    }
+
+    // Render cards
+    function renderLibrary(data) {
+        // Render assets
+        if (!data.assets || data.assets.length === 0) {
+            assetsGrid.innerHTML = '<div class="empty-state">尚未上傳過任何素材</div>';
+        } else {
+            assetsGrid.innerHTML = '';
+            data.assets.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'media-card';
+                
+                let previewHtml = '';
+                if (item.type === 'image') {
+                    previewHtml = `<img src="${item.url}" alt="${item.name}">`;
+                } else if (item.type === 'video') {
+                    previewHtml = `<video src="${item.url}" muted loop playsinline onmouseover="this.play()" onmouseout="this.pause()"></video>`;
+                } else {
+                    // Audio
+                    previewHtml = `<div class="audio-preview-icon">🎵</div>`;
+                }
+                
+                const memoHtml = item.memo ? item.memo : '<span style="color:rgba(255,255,255,0.15)">點擊編輯按鈕為此素材新增備註描述...</span>';
+                
+                card.innerHTML = `
+                    <div class="media-preview">
+                        ${previewHtml}
+                    </div>
+                    <div class="media-info">
+                        <div class="media-name" title="${item.name}">${item.name}</div>
+                        <div class="media-memo" title="${item.memo || ''}">${memoHtml}</div>
+                        <div class="media-date">${item.uploaded_at}</div>
+                    </div>
+                    <div class="media-actions">
+                        <button type="button" class="media-actions-btn edit-btn" onclick="openEditModal('assets', '${item.filename}', \`${item.name.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`, \`${(item.memo || '').replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`)">
+                            ✏️ 編輯
+                        </button>
+                        <button type="button" class="media-actions-btn delete-btn" onclick="deleteLibraryItem('assets', '${item.filename}')">
+                            🗑️ 刪除
+                        </button>
+                    </div>
+                `;
+                assetsGrid.appendChild(card);
+            });
+        }
+
+        // Render videos
+        if (!data.videos || data.videos.length === 0) {
+            videosGrid.innerHTML = '<div class="empty-state">尚未生成過任何影片</div>';
+        } else {
+            videosGrid.innerHTML = '';
+            data.videos.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'media-card';
+                
+                const previewHtml = `<video src="${item.url}" muted loop playsinline onmouseover="this.play()" onmouseout="this.pause()"></video>`;
+                const memoHtml = item.memo ? item.memo : '<span style="color:rgba(255,255,255,0.15)">沒有備註...</span>';
+                
+                card.innerHTML = `
+                    <div class="media-preview">
+                        ${previewHtml}
+                    </div>
+                    <div class="media-info">
+                        <div class="media-name" title="${item.name}">${item.name}</div>
+                        <div class="media-memo" title="${item.memo || ''}">${memoHtml}</div>
+                        <div class="media-date">${item.created_at}</div>
+                    </div>
+                    <div class="media-actions">
+                        <button type="button" class="media-actions-btn edit-btn" onclick="openEditModal('videos', '${item.filename}', \`${item.name.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`, \`${(item.memo || '').replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`)">
+                            ✏️ 編輯
+                        </button>
+                        <button type="button" class="media-actions-btn delete-btn" onclick="deleteLibraryItem('videos', '${item.filename}')">
+                            🗑️ 刪除
+                        </button>
+                    </div>
+                `;
+                videosGrid.appendChild(card);
+            });
+        }
+    }
+
+    // Switch Tabs
+    window.switchMediaTab = function(tabCategory) {
+        currentTab = tabCategory;
+        if (tabCategory === 'assets') {
+            tabAssetsBtn.classList.add('active');
+            tabVideosBtn.classList.remove('active');
+            assetsGrid.classList.add('active');
+            videosGrid.classList.remove('active');
+        } else {
+            tabAssetsBtn.classList.remove('active');
+            tabVideosBtn.classList.add('active');
+            assetsGrid.classList.remove('active');
+            videosGrid.classList.add('active');
+        }
+    };
+
+    // Modal Control
+    window.openEditModal = function(category, id, name, memo) {
+        editCategoryInput.value = category;
+        editIdInput.value = id;
+        editNameInput.value = name;
+        editMemoInput.value = memo;
+        editModal.classList.add('active');
+    };
+
+    window.closeEditModal = function() {
+        editModal.classList.remove('active');
+        editForm.reset();
+    };
+
+    // Form Update Submission
+    editForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const payload = {
+            category: editCategoryInput.value,
+            id: editIdInput.value,
+            name: editNameInput.value,
+            memo: editMemoInput.value
+        };
+
+        try {
+            const res = await fetch('/api/library/update', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (!res.ok) throw new Error('修改項目失敗');
+            
+            closeEditModal();
+            loadLibrary(); // Reload list
+        } catch (error) {
+            alert(`更新失敗: ${error.message}`);
+        }
+    });
+
+    // Delete Item
+    window.deleteLibraryItem = async function(category, id) {
+        if (!confirm('您確定要永久刪除此項目與檔案嗎？此操作無法還原。')) return;
+
+        try {
+            const res = await fetch(`/api/library/${category}/${id}`, {
+                method: 'DELETE'
+            });
+
+            if (!res.ok) throw new Error('刪除失敗');
+            loadLibrary(); // Reload list
+        } catch (error) {
+            alert(`刪除錯誤: ${error.message}`);
+        }
+    };
 });

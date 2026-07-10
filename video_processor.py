@@ -427,6 +427,214 @@ def generate_logo_intro_video(task_id, logo_path, brand_name, tagline, bg_music_
     progress_callback(task_id, 100, "品牌片頭生成完成！")
 
 
+def process_promo_image(img_path, width=720, height=1280):
+    """Resize image preserving aspect ratio and crop the center to fill a 720x1280 frame."""
+    with Image.open(img_path) as img:
+        img = img.convert("RGBA")
+        target_ratio = width / height
+        img_ratio = img.width / img.height
+        
+        if img_ratio > target_ratio:
+            new_height = height
+            new_width = int(img.width * (height / img.height))
+        else:
+            new_width = width
+            new_height = int(img.height * (width / img.width))
+            
+        img_resized = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        
+        left = (new_width - width) // 2
+        top = (new_height - height) // 2
+        right = left + width
+        bottom = top + height
+        
+        img_cropped = img_resized.crop((left, top, right, bottom))
+        return img_cropped.convert("RGB")
+
+
+def create_promo_text_overlay(brand_name, product_name, highlight, cta, width=720, height=1280, duration=2.5):
+    """Creates a transparent ImageClip overlay with centered portrait text and bottom gradient overlay using Pillow."""
+    image = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(image)
+    
+    font_bold = None
+    font_reg = None
+    font_names = []
+    if sys.platform.startswith("win"):
+        font_names = ["msjhbd.ttc", "msjh.ttc", "arialbd.ttf", "arial.ttf", "simsun.ttc"]
+    elif sys.platform.startswith("darwin"):
+        font_names = ["/System/Library/Fonts/PingFang.ttc", "/Library/Fonts/Arial.ttf"]
+    else:
+        font_names = ["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"]
+        
+    for fn in font_names:
+        try:
+            font_bold = ImageFont.truetype(fn, 44)
+            font_reg = ImageFont.truetype(fn, 26)
+            break
+        except Exception:
+            continue
+    if not font_bold:
+        font_bold = ImageFont.load_default()
+        font_reg = ImageFont.load_default()
+        
+    # Draw soft dark transparent gradient at the bottom 530px
+    for y in range(750, 1280):
+        # Scale alpha smoothly from 0 at y=750 to 180 at bottom
+        alpha = int(((y - 750) / 530) * 180)
+        draw.line([(0, y), (width, y)], fill=(0, 0, 0, alpha))
+        
+    if brand_name and product_name:
+        # Brand text (centered, y=890)
+        try:
+            if hasattr(font_reg, 'getbbox'):
+                w_b = font_reg.getbbox(brand_name)[2]
+            else:
+                w_b = font_reg.getsize(brand_name)[0]
+        except Exception:
+            w_b = len(brand_name) * 26 * 0.6
+        draw.text(((width - w_b) // 2, 890), brand_name, fill=(210, 210, 210, 255), font=font_reg)
+        
+        # Product Name (centered, y=950)
+        try:
+            if hasattr(font_bold, 'getbbox'):
+                w_p = font_bold.getbbox(product_name)[2]
+            else:
+                w_p = font_bold.getsize(product_name)[0]
+        except Exception:
+            w_p = len(product_name) * 44 * 0.6
+        draw.text(((width - w_p) // 2, 950), product_name, fill=(255, 255, 255, 255), font=font_bold)
+        
+    elif highlight:
+        # Highlight text (centered, y=940)
+        try:
+            if hasattr(font_bold, 'getbbox'):
+                w_h = font_bold.getbbox(highlight)[2]
+            else:
+                w_h = font_bold.getsize(highlight)[0]
+        except Exception:
+            w_h = len(highlight) * 44 * 0.6
+            
+        # Draw a tiny accent bar under the highlight text
+        h_y = 940
+        draw.text(((width - w_h) // 2, h_y), highlight, fill=(255, 255, 255, 255), font=font_bold)
+        draw.line([((width - w_h) // 2, h_y + 65), ((width + w_h) // 2, h_y + 65)], fill=(139, 92, 246, 255), width=4)
+        
+    elif brand_name and cta:
+        # Brand text (centered, y=870)
+        try:
+            if hasattr(font_reg, 'getbbox'):
+                w_b = font_reg.getbbox(brand_name)[2]
+            else:
+                w_b = font_reg.getsize(brand_name)[0]
+        except Exception:
+            w_b = len(brand_name) * 26 * 0.6
+        draw.text(((width - w_b) // 2, 870), brand_name, fill=(210, 210, 210, 255), font=font_reg)
+        
+        # CTA Button (centered, y=940)
+        btn_w = 360
+        btn_h = 75
+        btn_x = (width - btn_w) // 2
+        btn_y = 940
+        try:
+            # Rounded filled rectangle with white border
+            draw.rounded_rectangle([btn_x, btn_y, btn_x + btn_w, btn_y + btn_h], radius=15, fill=(139, 92, 246, 130), outline=(255, 255, 255, 255), width=3)
+        except Exception:
+            draw.rectangle([btn_x, btn_y, btn_x + btn_w, btn_y + btn_h], fill=(139, 92, 246, 130), outline=(255, 255, 255, 255), width=3)
+            
+        try:
+            if hasattr(font_bold, 'getbbox'):
+                w_c = font_bold.getbbox(cta)[2]
+            else:
+                w_c = font_bold.getsize(cta)[0]
+        except Exception:
+            w_c = len(cta) * 44 * 0.6
+        draw.text((btn_x + (btn_w - w_c) // 2, btn_y + (btn_h - 52) // 2), cta, fill=(255, 255, 255, 255), font=font_bold)
+        
+    img_array = np.array(image)
+    rgb_array = img_array[:, :, :3]
+    alpha_array = img_array[:, :, 3] / 255.0
+    
+    mask = ImageClip(alpha_array, is_mask=True).with_duration(duration)
+    clip = ImageClip(rgb_array).with_mask(mask).with_duration(duration)
+    return clip
+
+
+def generate_product_promo_video(task_id, images_paths, brand_name, product_name, highlights, bg_music_path, output_path, progress_callback):
+    """Generate a 15-second vertical (720x1280) product promotion video."""
+    progress_callback(task_id, 10, "正在讀取並處理商品圖片...")
+    
+    if not images_paths:
+        raise ValueError("必須提供至少一張商品圖片！")
+        
+    # Ensure at least 6 image paths are available
+    working_imgs = list(images_paths)
+    while len(working_imgs) < 6:
+        working_imgs = working_imgs + working_imgs
+        
+    scene_dur = 2.5
+    clips = []
+    
+    # Process 6 scenes (total 15 seconds)
+    for i in range(6):
+        img_path = working_imgs[i]
+        img = process_promo_image(img_path)
+        
+        img_clip = ImageClip(np.array(img)).with_duration(scene_dur)
+        # Apply smooth zoom effect (zoom from 100% to 110% over 2.5s)
+        img_clip = img_clip.resized(lambda t: 1.0 + 0.04 * t)
+        
+        # Set scene text overlays
+        if i == 0:
+            overlay = create_promo_text_overlay(brand_name, product_name, None, None, duration=scene_dur)
+        elif i == 1:
+            overlay = create_promo_text_overlay(None, None, highlights[0] if len(highlights) > 0 else "", None, duration=scene_dur)
+        elif i == 2:
+            overlay = create_promo_text_overlay(None, None, highlights[1] if len(highlights) > 1 else "", None, duration=scene_dur)
+        elif i == 3:
+            overlay = create_promo_text_overlay(None, None, highlights[2] if len(highlights) > 2 else "", None, duration=scene_dur)
+        elif i == 4:
+            overlay = create_promo_text_overlay(None, None, "頂級工藝 卓越品質", None, duration=scene_dur)
+        else: # i == 5
+            overlay = create_promo_text_overlay(brand_name, None, None, "立即選購", duration=scene_dur)
+            
+        scene = CompositeVideoClip([img_clip, overlay]).with_duration(scene_dur)
+        scene = scene.with_start(i * scene_dur)
+        clips.append(scene)
+        
+    progress_callback(task_id, 35, "正在合成串聯軌道並剪輯音樂...")
+    video = CompositeVideoClip(clips).with_duration(15.0)
+    
+    if bg_music_path and os.path.exists(bg_music_path):
+        progress_callback(task_id, 50, "正在剪輯與混音背景音樂...")
+        try:
+            audio = AudioFileClip(bg_music_path)
+            if audio.duration < 15.0:
+                audio = audio.with_effects([AudioLoop(duration=15.0)])
+            else:
+                audio = audio.subclipped(0, 15.0)
+            audio = audio.with_effects([AudioFadeOut(1.0)])
+            video = video.with_audio(audio)
+        except Exception as e:
+            print(f"Error adding audio to promo: {e}")
+            
+    progress_callback(task_id, 65, "正在開始影片渲染編碼...")
+    logger = CustomMoviePyLogger(task_id, progress_callback)
+    
+    video.write_videofile(
+        output_path,
+        fps=24,
+        codec="libx264",
+        audio_codec="aac",
+        logger=logger
+    )
+    
+    video.close()
+    for c in clips:
+        c.close()
+    progress_callback(task_id, 100, "影片生成完成！")
+
+
 def generate_default_previews(templates_dir, assets_dir):
     """Automatically pre-generate preview videos for the templates using programmatically generated assets."""
     os.makedirs(templates_dir, exist_ok=True)
@@ -435,13 +643,13 @@ def generate_default_previews(templates_dir, assets_dir):
     slideshow_preview = os.path.join(templates_dir, "slideshow_preview.mp4")
     meme_preview = os.path.join(templates_dir, "meme_preview.mp4")
     intro_preview = os.path.join(templates_dir, "intro_preview.mp4")
+    promo_preview = os.path.join(templates_dir, "promo_preview.mp4")
     
     # 1. Write a dummy beep sound to assets for intro / slideshow background
     beep_path = os.path.join(assets_dir, "default_audio.mp3")
     if not os.path.exists(beep_path):
         # Generate simple sound file using moviepy synthesized tone
         def make_tone(t):
-            # Combined frequencies for a nicer chime chord
             return np.sin(2 * np.pi * 330 * t) + np.sin(2 * np.pi * 440 * t)
         
         tone = AudioClip(make_tone, duration=15, fps=44100)
@@ -464,7 +672,6 @@ def generate_default_previews(templates_dir, assets_dir):
         img = Image.new("RGBA", (300, 300), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
         draw.ellipse([50, 50, 250, 250], fill=(138, 43, 226, 255), outline=(255, 255, 255, 255), width=5)
-        # Draw a bold letter 'A'
         draw.text((120, 110), "A", fill=(255, 255, 255, 255), font_size=80)
         img.save(dummy_logo)
         
@@ -528,6 +735,24 @@ def generate_default_previews(templates_dir, assets_dir):
             )
         except Exception as e:
             print(f"Error generating intro preview: {e}")
+            
+    # Generate Product Promo Preview
+    if not os.path.exists(promo_preview):
+        print("Generating product promo preview video...")
+        try:
+            promo_imgs = dummy_imgs * 2
+            generate_product_promo_video(
+                "init_promo", 
+                promo_imgs, 
+                "Aether Studio", 
+                "北歐風極簡藍牙喇叭", 
+                ["劇院級立體環繞音效", "24小時長效續航力", "極簡工藝 美學設計"], 
+                beep_path, 
+                promo_preview, 
+                lambda *args: None
+            )
+        except Exception as e:
+            print(f"Error generating promo preview: {e}")
             
     # Clean up temp slides/base video
     for p in dummy_imgs + [base_video]:

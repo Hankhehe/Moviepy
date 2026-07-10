@@ -90,7 +90,54 @@
                 </div>
             </div>
 
+        <!-- 4. Media Center Section (Persistent Gallery) -->
+        <section class="media-center-section" id="mediaCenterSection">
+            <div class="section-header">
+                <h2>📁 媒體中心 (Media Center)</h2>
+                <div class="media-tabs">
+                    <button type="button" class="tab-btn active" id="tabAssetsBtn" onclick="switchMediaTab('assets')">素材庫</button>
+                    <button type="button" class="tab-btn" id="tabVideosBtn" onclick="switchMediaTab('videos')">歷史影片</button>
+                </div>
+            </div>
+            
+            <!-- Materials Grid -->
+            <div class="media-grid active" id="assetsGrid">
+                <!-- Loaded dynamically by app.js -->
+                <div class="empty-state">尚未上傳過任何素材</div>
+            </div>
+            
+            <!-- Videos Grid -->
+            <div class="media-grid" id="videosGrid">
+                <!-- Loaded dynamically by app.js -->
+                <div class="empty-state">尚未生成過任何影片</div>
+            </div>
         </section>
+
+        <!-- Edit Modal Dialog -->
+        <div class="modal-overlay" id="editModal">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <h3>📝 編輯項目資訊</h3>
+                    <button type="button" class="close-modal-btn" onclick="closeEditModal()">×</button>
+                </div>
+                <form id="editForm">
+                    <input type="hidden" id="editCategory">
+                    <input type="hidden" id="editId">
+                    <div class="form-group">
+                        <label for="editName">項目名稱</label>
+                        <input type="text" id="editName" required placeholder="請輸入項目名稱">
+                    </div>
+                    <div class="form-group">
+                        <label for="editMemo">備註描述</label>
+                        <textarea id="editMemo" rows="3" placeholder="為此項目加上備註或說明..."></textarea>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="modal-btn cancel-btn" onclick="closeEditModal()">取消</button>
+                        <button type="submit" class="modal-btn save-btn">儲存修改</button>
+                    </div>
+                </form>
+            </div>
+        </div>
 
     </main>
 

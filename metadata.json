@@ -1,0 +1,46 @@
+{
+    "assets": {
+        "9ebf1c9c-42e0-4d0b-9034-ba11311f0422_images_0_07c0f5.jpg": {
+            "filename": "9ebf1c9c-42e0-4d0b-9034-ba11311f0422_images_0_07c0f5.jpg",
+            "name": "PXL_20260620_103749270.MP.jpg",
+            "memo": "",
+            "type": "image",
+            "url": "/library/9ebf1c9c-42e0-4d0b-9034-ba11311f0422_images_0_07c0f5.jpg",
+            "uploaded_at": "2026-07-11 00:50:12"
+        },
+        "9ebf1c9c-42e0-4d0b-9034-ba11311f0422_images_1_daa87f.jpg": {
+            "filename": "9ebf1c9c-42e0-4d0b-9034-ba11311f0422_images_1_daa87f.jpg",
+            "name": "PXL_20260613_024114133.jpg",
+            "memo": "",
+            "type": "image",
+            "url": "/library/9ebf1c9c-42e0-4d0b-9034-ba11311f0422_images_1_daa87f.jpg",
+            "uploaded_at": "2026-07-11 00:50:12"
+        },
+        "9ebf1c9c-42e0-4d0b-9034-ba11311f0422_images_2_4a58e0.jpg": {
+            "filename": "9ebf1c9c-42e0-4d0b-9034-ba11311f0422_images_2_4a58e0.jpg",
+            "name": "PXL_20260613_022648500.PORTRAIT.ORIGINAL.jpg",
+            "memo": "",
+            "type": "image",
+            "url": "/library/9ebf1c9c-42e0-4d0b-9034-ba11311f0422_images_2_4a58e0.jpg",
+            "uploaded_at": "2026-07-11 00:50:12"
+        },
+        "9ebf1c9c-42e0-4d0b-9034-ba11311f0422_images_3_d8bea9.jpg": {
+            "filename": "9ebf1c9c-42e0-4d0b-9034-ba11311f0422_images_3_d8bea9.jpg",
+            "name": "PXL_20260613_021449147.MP.jpg",
+            "memo": "",
+            "type": "image",
+            "url": "/library/9ebf1c9c-42e0-4d0b-9034-ba11311f0422_images_3_d8bea9.jpg",
+            "uploaded_at": "2026-07-11 00:50:12"
+        }
+    },
+    "videos": {
+        "output_9ebf1c9c-42e0-4d0b-9034-ba11311f0422.mp4": {
+            "filename": "output_9ebf1c9c-42e0-4d0b-9034-ba11311f0422.mp4",
+            "name": "高質感商品宣傳短片 - 0711_0051",
+            "memo": "使用「高質感商品宣傳短片」範本於 2026-07-11 00:51:18 製作完成。",
+            "url": "/outputs/output_9ebf1c9c-42e0-4d0b-9034-ba11311f0422.mp4",
+            "template_id": "product_promo",
+            "created_at": "2026-07-11 00:51:18"
+        }
+    }
+}
