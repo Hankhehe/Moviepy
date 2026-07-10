@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AetherClip - 影片範本智慧生成系統</title>
+    <meta name="description" content="上傳素材，快速生成高質感範本影片。基於 Python 與 MoviePy 的高效影片剪輯平台。">
+    <!-- Style Sheet -->
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+    <!-- Glowing background elements -->
+    <div class="glow-blob blob-1"></div>
+    <div class="glow-blob blob-2"></div>
+
+    <!-- Header Navigation -->
+    <header>
+        <div class="logo-container">
+            <div class="logo-icon">A</div>
+            <div class="logo-text">AetherClip</div>
+        </div>
+        <span class="tagline-badge">AI Video Engine</span>
+    </header>
+
+    <!-- Main Workspace -->
+    <main>
+        
+        <!-- Hero Title -->
+        <section class="hero">
+            <h1>打造精彩影片，只需幾秒</h1>
+            <p>選擇一個影片範本，上傳您的素材圖片、短片、Logo 或音訊，系統將自動套用極致轉場與剪輯效果，生成專屬的高畫質影片。</p>
+        </section>
+
+        <!-- Video Templates Grid -->
+        <section class="templates-section">
+            <div class="templates-grid" id="templatesGrid">
+                <!-- Loaded dynamically by app.js -->
+                <div style="text-align: center; grid-column: 1/-1; padding: 3rem; color: var(--text-secondary);">
+                    正在載入範本庫...
+                </div>
+            </div>
+        </section>
+
+        <!-- Interactive Workspace (Toggled by app.js) -->
+        <section class="workspace-section" id="workspaceSection">
+            
+            <!-- 1. Configuration Form -->
+            <div id="formContainer">
+                <h2 class="workspace-title" id="workspaceTitle">開始製作影片</h2>
+                <form id="renderForm" enctype="multipart/form-data">
+                    <input type="hidden" name="template_id" id="templateIdInput">
+                    
+                    <!-- Dynamic fields will be inserted here by app.js -->
+                    <div id="dynamicFields"></div>
+
+                    <button type="submit" class="submit-btn" id="submitBtn">開始合成影片</button>
+                </form>
+            </div>
+
+            <!-- 2. Rendering Progress Overlay -->
+            <div class="progress-container" id="progressContainer">
+                <div class="progress-loader"></div>
+                <div class="progress-percentage" id="progressPercentage">0%</div>
+                <div class="progress-status-msg" id="progressStatusMsg">影片渲染中，請稍候...</div>
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill" id="progressBarFill"></div>
+                </div>
+            </div>
+
+            <!-- 3. Final Result Player and Download -->
+            <div class="result-container" id="resultContainer">
+                <div class="success-icon">✓</div>
+                <h2>您的影片已製作完成！</h2>
+                <p style="color: var(--text-secondary); margin-bottom: 2rem;">可以點擊下方播放器進行預覽，或直接點擊按鈕下載。</p>
+                
+                <div class="output-video-wrapper">
+                    <video id="resultVideoPlayer" controls></video>
+                </div>
+                
+                <div class="result-actions">
+                    <a href="#" class="action-btn download-btn" id="downloadBtn" download>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                        下載影片檔案
+                    </a>
+                    <button class="action-btn reset-btn" id="resetBtn">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
+                        製作下一個
+                    </button>
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- Application Script -->
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
