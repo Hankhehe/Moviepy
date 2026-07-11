@@ -127,6 +127,22 @@
             "type": "video",
             "url": "/library/movies/7bb70e42-0aea-44ae-8afb-a38a4412ae0a_scene_1_file_42ab21.mp4",
             "uploaded_at": "2026-07-11 11:24:24"
+        },
+        "muted_6404dd_7bb70e42-0aea-44ae-8afb-a38a4412ae0a_scene_1_file_42ab21.mp4": {
+            "filename": "muted_6404dd_7bb70e42-0aea-44ae-8afb-a38a4412ae0a_scene_1_file_42ab21.mp4",
+            "name": "[靜音] product_sample.mp4",
+            "memo": "自影片「product_sample.mp4」去除聲音後的影片。",
+            "type": "video",
+            "url": "/library/movies/muted_6404dd_7bb70e42-0aea-44ae-8afb-a38a4412ae0a_scene_1_file_42ab21.mp4",
+            "uploaded_at": "2026-07-12 00:00:32"
+        },
+        "extracted_def359_7bb70e42-0aea-44ae-8afb-a38a4412ae0a_scene_1_file_42ab21.mp3": {
+            "filename": "extracted_def359_7bb70e42-0aea-44ae-8afb-a38a4412ae0a_scene_1_file_42ab21.mp3",
+            "name": "[音訊] product_sample.mp3",
+            "memo": "自影片「product_sample.mp4」提取出的 MP3 音訊檔。",
+            "type": "audio",
+            "url": "/library/music/extracted_def359_7bb70e42-0aea-44ae-8afb-a38a4412ae0a_scene_1_file_42ab21.mp3",
+            "uploaded_at": "2026-07-12 00:00:57"
         }
     },
     "videos": {
@@ -156,59 +172,49 @@
         }
     },
     "custom_templates": {
-        "custom_f8553eb8": {
-            "id": "custom_f8553eb8",
-            "name": "已更新的測試自訂分鏡範本",
-            "description": "這是一個用於驗證的測試範本",
+        "custom_e9ded093": {
+            "id": "custom_e9ded093",
+            "name": "測試影音與可選文字範本",
+            "description": "測試聲音靜音、調整音量，以及文字啟用與否的範本",
             "aspect_ratio": "9:16",
             "scenes": [
                 {
-                    "duration": 4.5,
-                    "visual_type": "image_zoom",
+                    "duration": 3.0,
+                    "visual_type": "user_video",
                     "zoom_direction": "in",
-                    "color": "#ff0000",
+                    "color": "#000000",
                     "asset_field": "scene_0_file",
                     "texts": [
                         {
-                            "content": "第一幕測試文字",
+                            "content": "這是啟用文字的靜音場景",
                             "position": "center",
                             "color": "#ffffff",
-                            "font_size": 48,
-                            "start_time": 0.5,
-                            "end_time": 4.0
+                            "font_size": 40,
+                            "start_time": 0.0,
+                            "end_time": 3.0
+                        }
+                    ]
+                },
+                {
+                    "duration": 3.0,
+                    "visual_type": "user_video",
+                    "zoom_direction": "in",
+                    "color": "#000000",
+                    "asset_field": "scene_1_file",
+                    "texts": [
+                        {
+                            "content": "這是停用文字的半音量場景",
+                            "position": "center",
+                            "color": "#ff0000",
+                            "font_size": 40,
+                            "start_time": 0.0,
+                            "end_time": 3.0
                         }
                     ]
                 }
             ],
-            "created_at": "2026-07-11 19:54:18",
-            "updated_at": "2026-07-11 19:54:18"
-        },
-        "custom_9151238e": {
-            "id": "custom_9151238e",
-            "name": "已更新的測試自訂分鏡範本",
-            "description": "這是一個用於驗證的測試範本",
-            "aspect_ratio": "9:16",
-            "scenes": [
-                {
-                    "duration": 4.5,
-                    "visual_type": "image_zoom",
-                    "zoom_direction": "in",
-                    "color": "#ff0000",
-                    "asset_field": "scene_0_file",
-                    "texts": [
-                        {
-                            "content": "第一幕測試文字",
-                            "position": "center",
-                            "color": "#ffffff",
-                            "font_size": 48,
-                            "start_time": 0.5,
-                            "end_time": 4.0
-                        }
-                    ]
-                }
-            ],
-            "created_at": "2026-07-11 19:57:18",
-            "updated_at": "2026-07-11 19:57:19"
+            "created_at": "2026-07-11 23:48:35",
+            "updated_at": "2026-07-11 23:48:35"
         }
     },
     "system_initialized": true

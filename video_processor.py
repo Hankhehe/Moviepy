@@ -696,13 +696,37 @@ def create_custom_text_overlay(text_items, width, height, duration):
             w_t = len(content) * size * 0.6
             h_t = size
             
-        # Parse position
-        if position == "top":
+        # Parse position (9-grid positions)
+        safe_margin_x = int(width * 0.05)
+        safe_margin_y = int(height * 0.05)
+        
+        if position == "top_left":
+            x = safe_margin_x
+            y = safe_margin_y
+        elif position == "top_center" or position == "top":
             x = (width - w_t) // 2
-            y = int(height * 0.15)
-        elif position == "bottom":
+            y = safe_margin_y
+        elif position == "top_right":
+            x = width - w_t - safe_margin_x
+            y = safe_margin_y
+        elif position == "center_left":
+            x = safe_margin_x
+            y = (height - h_t) // 2
+        elif position == "center":
             x = (width - w_t) // 2
-            y = int(height * 0.75)
+            y = (height - h_t) // 2
+        elif position == "center_right":
+            x = width - w_t - safe_margin_x
+            y = (height - h_t) // 2
+        elif position == "bottom_left":
+            x = safe_margin_x
+            y = height - h_t - safe_margin_y
+        elif position == "bottom_center" or position == "bottom":
+            x = (width - w_t) // 2
+            y = height - h_t - safe_margin_y
+        elif position == "bottom_right":
+            x = width - w_t - safe_margin_x
+            y = height - h_t - safe_margin_y
         elif "," in position:
             try:
                 px, py = position.split(",")
@@ -711,7 +735,7 @@ def create_custom_text_overlay(text_items, width, height, duration):
             except Exception:
                 x = (width - w_t) // 2
                 y = (height - h_t) // 2
-        else: # center
+        else:
             x = (width - w_t) // 2
             y = (height - h_t) // 2
             
@@ -746,6 +770,25 @@ def generate_custom_template_video(task_id, custom_tpl, file_paths, bg_music, ou
         
         duration = float(scene.get("duration", 3.0))
         visual_type = scene.get("visual_type", "image_zoom")
+        
+        # Auto duration matching for user videos
+        if visual_type == "user_video":
+            field_name = scene.get("asset_field", f"scene_{idx}_file")
+            video_path = file_paths.get(field_name)
+            if video_path and os.path.exists(video_path):
+                if duration <= 0:
+                    try:
+                        temp_c = VideoFileClip(video_path)
+                        duration = temp_c.duration
+                        temp_c.close()
+                    except Exception:
+                        duration = 3.0
+            else:
+                if duration <= 0:
+                    duration = 3.0
+        else:
+            if duration <= 0:
+                duration = 3.0
         
         base_clip = None
         
@@ -802,6 +845,15 @@ def generate_custom_template_video(task_id, custom_tpl, file_paths, bg_music, ou
                 from moviepy.video.fx.Crop import Crop
                 base_clip = base_clip.with_effects([Crop(x1=crop_x, y1=crop_y, width=width, height=height)])
                 
+                # Apply Audio settings (mute or volume control)
+                audio_option = scene.get("audio_option", "keep")
+                if base_clip.audio is not None:
+                    if audio_option == "mute":
+                        base_clip = base_clip.without_audio()
+                    elif audio_option == "volume":
+                        vol_scale = float(scene.get("audio_volume", 1.0))
+                        base_clip = base_clip.with_audio(base_clip.audio.multiply_volume(vol_scale))
+                
         elif visual_type == "solid_color":
             color_hex = scene.get("color", "#000000")
             try:
@@ -817,7 +869,9 @@ def generate_custom_template_video(task_id, custom_tpl, file_paths, bg_music, ou
             from moviepy.video.VideoClip import ColorClip
             base_clip = ColorClip(size=(width, height), color=(0, 0, 0), duration=duration)
             
-        text_items = scene.get("texts", [])
+        # Check if text overlay is enabled for this scene
+        enable_text = scene.get("enable_text", True)
+        text_items = scene.get("texts", []) if enable_text else []
         scene_composited_clips = [base_clip]
         
         for text in text_items:
@@ -838,8 +892,37 @@ def generate_custom_template_video(task_id, custom_tpl, file_paths, bg_music, ou
         scene_final_clip = CompositeVideoClip(scene_composited_clips, size=(width, height)).with_duration(duration)
         clips.append(scene_final_clip)
         
-    progress_callback(task_id, 70, "正在連接所有自訂場景...")
-    final_video = concatenate_videoclips(clips, method="compose")
+    progress_callback(task_id, 70, "正在連接所有自訂場景並套用轉場效果...")
+    transition_effect = custom_tpl.get("transition_effect", "none")
+    
+    if transition_effect == "crossfade" and len(clips) > 1:
+        overlap = 0.5
+        composited_clips = []
+        current_start = 0.0
+        
+        for idx, clip in enumerate(clips):
+            if idx == 0:
+                clip = clip.with_start(0.0)
+                composited_clips.append(clip)
+                current_start += clip.duration
+            else:
+                clip_start = current_start - overlap
+                clip = clip.with_start(clip_start)
+                clip = clip.with_effects([vfx.FadeIn(overlap)])
+                composited_clips.append(clip)
+                current_start = clip_start + clip.duration
+                
+        total_duration = current_start
+        final_video = CompositeVideoClip(composited_clips, size=(width, height)).with_duration(total_duration)
+    else:
+        if transition_effect == "fade":
+            fade_clips = []
+            for clip in clips:
+                faded = clip.with_effects([vfx.FadeIn(0.5), vfx.FadeOut(0.5)])
+                fade_clips.append(faded)
+            final_video = concatenate_videoclips(fade_clips, method="compose")
+        else:
+            final_video = concatenate_videoclips(clips, method="compose")
     
     if bg_music and os.path.exists(bg_music):
         progress_callback(task_id, 80, "正在合成背景音樂...")
@@ -875,6 +958,129 @@ def generate_custom_template_video(task_id, custom_tpl, file_paths, bg_music, ou
         c.close()
         
     progress_callback(task_id, 100, "影片生成完成！")
+
+
+def process_media_tool_temp(input_file_path: str, action: str, output_path: str):
+    """
+    Applies media tools (like muting video or extracting audio) to a file,
+    saving the output directly to a temporary output path.
+    """
+    if not os.path.exists(input_file_path):
+        raise ValueError(f"找不到所選的來源檔案: {input_file_path}")
+        
+    if action == "mute":
+        clip = VideoFileClip(input_file_path)
+        muted_clip = clip.without_audio()
+        
+        muted_clip.write_videofile(
+            output_path,
+            fps=clip.fps or 24,
+            codec="libx264",
+            logger=None
+        )
+        clip.close()
+        muted_clip.close()
+        
+    elif action == "extract":
+        clip = VideoFileClip(input_file_path)
+        if not clip.audio:
+            clip.close()
+            raise ValueError("此影片不包含任何音軌。")
+            
+        audio_clip = clip.audio
+        audio_clip.write_audiofile(
+            output_path,
+            fps=44100,
+            logger=None
+        )
+        clip.close()
+        
+    else:
+        raise ValueError(f"未知的處理動作: {action}")
+
+
+def process_media_tool(input_file_path: str, action: str, library_dir: str, load_db_func, save_db_func) -> str:
+    """
+    Applies media tools (like muting video or extracting audio) to a file in the media library,
+    saving the output to the correct subfolder (movies/music) and registering it in the metadata DB.
+    """
+    if not os.path.exists(input_file_path):
+        raise ValueError(f"找不到所選的來源檔案: {input_file_path}")
+        
+    filename = os.path.basename(input_file_path)
+    db = load_db_func()
+    asset_record = db.get("assets", {}).get(filename)
+    if not asset_record:
+        asset_record = {"name": filename, "type": "video"}
+        
+    original_name = asset_record.get("name", filename)
+    name_without_ext, ext = os.path.splitext(filename)
+    orig_name_without_ext, orig_ext = os.path.splitext(original_name)
+    
+    import uuid
+    from datetime import datetime
+    
+    if action == "mute":
+        output_filename = f"muted_{uuid.uuid4().hex[:6]}_{filename}"
+        output_dir = os.path.join(library_dir, "movies")
+        os.makedirs(output_dir, exist_ok=True)
+        output_path = os.path.join(output_dir, output_filename)
+        
+        clip = VideoFileClip(input_file_path)
+        muted_clip = clip.without_audio()
+        
+        muted_clip.write_videofile(
+            output_path,
+            fps=clip.fps or 24,
+            codec="libx264",
+            logger=None
+        )
+        clip.close()
+        muted_clip.close()
+        
+        db["assets"][output_filename] = {
+            "filename": output_filename,
+            "name": f"[靜音] {original_name}",
+            "memo": f"自影片「{original_name}」去除聲音後的影片。",
+            "type": "video",
+            "url": f"/library/movies/{output_filename}",
+            "uploaded_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        save_db_func(db)
+        return output_filename
+        
+    elif action == "extract":
+        output_filename = f"extracted_{uuid.uuid4().hex[:6]}_{name_without_ext}.mp3"
+        output_dir = os.path.join(library_dir, "music")
+        os.makedirs(output_dir, exist_ok=True)
+        output_path = os.path.join(output_dir, output_filename)
+        
+        clip = VideoFileClip(input_file_path)
+        if not clip.audio:
+            clip.close()
+            raise ValueError("此影片不包含任何音軌。")
+            
+        audio_clip = clip.audio
+        audio_clip.write_audiofile(
+            output_path,
+            fps=44100,
+            logger=None
+        )
+        clip.close()
+        
+        db["assets"][output_filename] = {
+            "filename": output_filename,
+            "name": f"[音訊] {orig_name_without_ext}.mp3",
+            "memo": f"自影片「{original_name}」提取出的 MP3 音訊檔。",
+            "type": "audio",
+            "url": f"/library/music/{output_filename}",
+            "uploaded_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        save_db_func(db)
+        return output_filename
+        
+    else:
+        raise ValueError(f"未知的處理動作: {action}")
 
 
 def generate_default_previews(templates_dir, library_photos_dir, library_music_dir):
@@ -1008,3 +1214,205 @@ def generate_default_previews(templates_dir, library_photos_dir, library_music_d
                 os.remove(p)
             except Exception:
                 pass
+
+
+def generate_blend_effect_video(task_id, img1_path, img2_path, duration, fade_duration, output_path, progress_callback):
+    progress_callback(task_id, 10, "正在載入圖片素材...")
+    
+    half_dur = duration / 2.0
+    half_fade = fade_duration / 2.0
+    
+    c1_dur = half_dur + half_fade
+    c2_dur = half_dur + half_fade
+    c2_start = half_dur - half_fade
+    
+    clip1 = ImageClip(img1_path).with_duration(c1_dur).resized((1280, 720))
+    clip2 = ImageClip(img2_path).with_duration(c2_dur).resized((1280, 720))
+    
+    clip2 = clip2.with_effects([vfx.FadeIn(fade_duration)]).with_start(c2_start)
+    
+    progress_callback(task_id, 30, "正在合成漸變特效影片...")
+    
+    final_clip = CompositeVideoClip([clip1, clip2], size=(1280, 720))
+    
+    final_clip.write_videofile(
+        output_path, 
+        fps=24, 
+        codec="libx264", 
+        audio=False, 
+        logger=None
+    )
+    
+    final_clip.close()
+    clip1.close()
+    clip2.close()
+    progress_callback(task_id, 100, "特效影片生成完成！")
+
+
+def generate_filter_effect_video(task_id, img_path, filter_type, duration, output_path, progress_callback):
+    progress_callback(task_id, 10, "正在載入圖片與套用濾鏡...")
+    
+    if filter_type == "mirror_x":
+        img = Image.open(img_path)
+        img_mirrored = img.transpose(Image.FLIP_LEFT_RIGHT)
+        clip = ImageClip(np.array(img_mirrored)).with_duration(duration).resized((1280, 720))
+    elif filter_type == "sepia":
+        img = Image.open(img_path).convert("RGB")
+        arr = np.array(img)
+        r, g, b = arr[:,:,0], arr[:,:,1], arr[:,:,2]
+        tr = 0.393 * r + 0.769 * g + 0.189 * b
+        tg = 0.349 * r + 0.686 * g + 0.168 * b
+        tb = 0.272 * r + 0.534 * g + 0.131 * b
+        sepia_arr = np.stack([tr, tg, tb], axis=-1)
+        sepia_arr = np.clip(sepia_arr, 0, 255).astype(np.uint8)
+        clip = ImageClip(sepia_arr).with_duration(duration).resized((1280, 720))
+    elif filter_type == "grayscale":
+        img = Image.open(img_path).convert("L").convert("RGB")
+        clip = ImageClip(np.array(img)).with_duration(duration).resized((1280, 720))
+    else:
+        clip = ImageClip(img_path).with_duration(duration).resized((1280, 720))
+        
+    if filter_type == "ken_burns":
+        clip = clip.resized(lambda t: 1.0 + 0.15 * (t / duration))
+    elif filter_type == "fade":
+        clip = clip.with_effects([vfx.FadeIn(0.8), vfx.FadeOut(0.8)])
+        
+    progress_callback(task_id, 40, "正在生成濾鏡特效影片...")
+    
+    final_clip = CompositeVideoClip([clip], size=(1280, 720)) if filter_type == "ken_burns" else clip
+    
+    final_clip.write_videofile(
+        output_path, 
+        fps=24, 
+        codec="libx264", 
+        audio=False, 
+        logger=None
+    )
+    
+    final_clip.close()
+    if filter_type == "ken_burns":
+        clip.close()
+        
+    progress_callback(task_id, 100, "特效影片生成完成！")
+
+
+def generate_multi_transition_video(task_id, img_paths, transition_type, slide_duration, transition_duration, output_path, progress_callback):
+    progress_callback(task_id, 10, f"正在載入 {len(img_paths)} 張圖片素材...")
+    
+    clips = []
+    step = slide_duration - transition_duration
+    
+    for i, path in enumerate(img_paths):
+        c = ImageClip(path).with_duration(slide_duration).resized((1280, 720))
+        
+        if i > 0:
+            c = c.with_effects([vfx.FadeIn(transition_duration)])
+            c = c.with_start(i * step)
+        else:
+            c = c.with_start(0)
+            
+        clips.append(c)
+        
+    progress_callback(task_id, 40, "正在合成多圖轉場影片...")
+    
+    final_clip = CompositeVideoClip(clips, size=(1280, 720))
+    
+    final_clip.write_videofile(
+        output_path, 
+        fps=24, 
+        codec="libx264", 
+        audio=False, 
+        logger=None
+    )
+    
+    final_clip.close()
+    for c in clips:
+        c.close()
+        
+    progress_callback(task_id, 100, "轉場影片生成完成！")
+
+
+def load_media_clip(path, duration):
+    ext = path.split('.')[-1].lower() if '.' in path else ''
+    if ext in ['mp4', 'mov', 'avi', 'mkv', 'webm']:
+        c = VideoFileClip(path)
+        if c.duration and c.duration < duration:
+            times = int(np.ceil(duration / c.duration))
+            c = concatenate_videoclips([c] * times).subclipped(0, duration)
+        else:
+            c = c.subclipped(0, duration)
+        return c
+    else:
+        return ImageClip(path).with_duration(duration)
+
+
+def generate_alpha_blend_video(task_id, media1_path, media2_path, opacity, duration, output_path, progress_callback):
+    progress_callback(task_id, 10, "正在載入並解析底層與頂層素材...")
+    
+    clip1 = load_media_clip(media1_path, duration).resized((1280, 720))
+    clip2 = load_media_clip(media2_path, duration).resized((1280, 720))
+    
+    progress_callback(task_id, 30, f"正在套用 {opacity} 半透明度疊加...")
+    clip2 = clip2.with_opacity(opacity)
+    
+    progress_callback(task_id, 50, "正在合成半透明疊加影片...")
+    final_clip = CompositeVideoClip([clip1, clip2], size=(1280, 720)).with_duration(duration)
+    
+    final_clip.write_videofile(
+        output_path, 
+        fps=24, 
+        codec="libx264", 
+        audio=False, 
+        logger=None
+    )
+    
+    final_clip.close()
+    clip1.close()
+    clip2.close()
+    progress_callback(task_id, 100, "半透明疊加影片合成完成！")
+
+
+def generate_grid_layout_video(task_id, media_paths, cols, rows, duration, gap, output_path, progress_callback):
+    progress_callback(task_id, 10, f"正在載入 {len(media_paths)} 個宮格素材...")
+    
+    cell_w = int((1280 - (cols + 1) * gap) / cols)
+    cell_h = int((720 - (rows + 1) * gap) / rows)
+    
+    clips = []
+    bg_clip = ColorClip(size=(1280, 720), color=(0, 0, 0)).with_duration(duration)
+    clips.append(bg_clip)
+    
+    for r in range(rows):
+        for c in range(cols):
+            idx = r * cols + c
+            if idx >= len(media_paths):
+                break
+                
+            path = media_paths[idx]
+            progress_callback(task_id, 20 + int(idx * 20 / len(media_paths)), f"正在載入第 {idx+1} 個宮格素材...")
+            
+            cell_clip = load_media_clip(path, duration).resized((cell_w, cell_h))
+            
+            x = gap + c * (cell_w + gap)
+            y = gap + r * (cell_h + gap)
+            
+            cell_clip = cell_clip.with_position((x, y))
+            clips.append(cell_clip)
+            
+    progress_callback(task_id, 50, "正在合成宮格排版影片...")
+    
+    final_clip = CompositeVideoClip(clips, size=(1280, 720)).with_duration(duration)
+    
+    final_clip.write_videofile(
+        output_path, 
+        fps=24, 
+        codec="libx264", 
+        audio=False, 
+        logger=None
+    )
+    
+    final_clip.close()
+    for clip in clips:
+        clip.close()
+        
+    progress_callback(task_id, 100, "宮格影片合成完成！")

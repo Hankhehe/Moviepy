@@ -355,21 +355,34 @@ async def get_templates():
             if visual_type == "image_zoom":
                 label = f"場景 {idx+1} 圖片素材 (圖片)"
                 accept = "image/*"
+                has_file = True
             elif visual_type == "user_video":
                 label = f"場景 {idx+1} 影片素材 (短片)"
                 accept = "video/*"
+                has_file = True
             else:
-                # Solid color does not require file upload
-                continue
+                has_file = False
                 
-            fields.append({
-                "name": field_name,
-                "label": label,
-                "type": "file",
-                "multiple": False,
-                "accept": accept,
-                "required": True
-            })
+            if has_file:
+                fields.append({
+                    "name": field_name,
+                    "label": label,
+                    "type": "file",
+                    "multiple": False,
+                    "accept": accept,
+                    "required": True
+                })
+                
+            if scene.get("enable_text", True):
+                for t_idx, text in enumerate(scene.get("texts", [])):
+                    fields.append({
+                        "name": f"scene_{idx}_text_{t_idx}",
+                        "label": f"場景 {idx+1} 文字 #{t_idx+1}",
+                        "type": "text",
+                        "placeholder": "輸入以修改文字 (留空則隱藏)",
+                        "default": text.get("content", ""),
+                        "required": False
+                    })
             
         # Add background music options
         fields.append({
@@ -469,6 +482,17 @@ def run_render_in_thread(task_id: str, template_id: str, params: Dict[str, Any],
             if not custom_tpl:
                 raise ValueError(f"Custom template {template_id} not found.")
                 
+            # Deep copy to avoid modifying the database in memory
+            import copy
+            custom_tpl = copy.deepcopy(custom_tpl)
+            
+            # Override text contents from request parameters
+            for idx, scene in enumerate(custom_tpl.get("scenes", [])):
+                for t_idx, text in enumerate(scene.get("texts", [])):
+                    param_name = f"scene_{idx}_text_{t_idx}"
+                    if param_name in params:
+                        text["content"] = params[param_name]
+                        
             music_selection = params.get("music", "library:ambient.mp3")
             bg_music = get_audio_path(music_selection, file_paths.get("custom_audio", None))
                 
@@ -767,6 +791,7 @@ class CustomTemplate(BaseModel):
     name: str
     description: str
     aspect_ratio: str  # "16:9" | "9:16"
+    transition_effect: str = "none"  # "none" | "fade" | "crossfade"
     scenes: List[Dict[str, Any]]
 
 @app.get("/api/templates/custom/{template_id}")
@@ -803,6 +828,9 @@ async def create_custom_template(ct: CustomTemplate):
             "visual_type": visual_type,
             "zoom_direction": scene.get("zoom_direction", "in"),
             "color": scene.get("color", "#000000"),
+            "audio_option": scene.get("audio_option", "keep"),
+            "audio_volume": float(scene.get("audio_volume", 1.0)),
+            "enable_text": bool(scene.get("enable_text", True)),
             "asset_field": f"scene_{idx}_file" if visual_type != "solid_color" else "",
             "texts": scene.get("texts", [])
         })
@@ -815,12 +843,177 @@ async def create_custom_template(ct: CustomTemplate):
         "name": ct.name,
         "description": ct.description,
         "aspect_ratio": ct.aspect_ratio,
+        "transition_effect": ct.transition_effect,
         "scenes": scenes_list,
         "created_at": created_at,
         "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     }
     save_db(db)
     return {"status": "success", "template_id": t_id}
+
+
+class GenerateEffectRequest(BaseModel):
+    tool: str  # "image_blend" | "image_filter" | "multi_transition"
+    params: Dict[str, Any]
+
+def run_effect_render_in_thread(task_id: str, tool: str, params: Dict[str, Any]):
+    ext = ".mp3" if tool == "audio_handler" and params.get("audio_action") == "extract" else ".mp4"
+    output_filename = f"output_{task_id}{ext}"
+    output_path = os.path.join(OUTPUT_DIR, output_filename)
+    
+    try:
+        if tool == "image_blend":
+            img1 = params.get("image1")
+            img2 = params.get("image2")
+            duration = float(params.get("duration", 5.0))
+            fade_duration = float(params.get("fade_duration", 1.0))
+            
+            video_processor.generate_blend_effect_video(
+                task_id, img1, img2, duration, fade_duration, output_path, update_task_progress
+            )
+        elif tool == "image_filter":
+            img = params.get("image")
+            filter_type = params.get("filter_type", "ken_burns")
+            duration = float(params.get("duration", 4.0))
+            
+            video_processor.generate_filter_effect_video(
+                task_id, img, filter_type, duration, output_path, update_task_progress
+            )
+        elif tool == "multi_transition":
+            images = params.get("images", [])
+            transition_type = params.get("transition_type", "crossfade")
+            slide_duration = float(params.get("slide_duration", 3.0))
+            transition_duration = float(params.get("transition_duration", 1.0))
+            
+            video_processor.generate_multi_transition_video(
+                task_id, images, transition_type, slide_duration, transition_duration, output_path, update_task_progress
+            )
+        elif tool == "alpha_blend":
+            media1 = params.get("media1")
+            media2 = params.get("media2")
+            opacity = float(params.get("opacity", 0.5))
+            duration = float(params.get("duration", 5.0))
+            
+            video_processor.generate_alpha_blend_video(
+                task_id, media1, media2, opacity, duration, output_path, update_task_progress
+            )
+        elif tool == "grid_layout":
+            medias = params.get("medias", [])
+            cols = int(params.get("cols", 2))
+            rows = int(params.get("rows", 2))
+            duration = float(params.get("duration", 5.0))
+            gap = int(params.get("gap", 4))
+            
+            video_processor.generate_grid_layout_video(
+                task_id, medias, cols, rows, duration, gap, output_path, update_task_progress
+            )
+        elif tool == "audio_handler":
+            video_path = params.get("video")
+            audio_action = params.get("audio_action")
+            
+            update_task_progress(task_id, 20, f"正在載入影片並進行音訊處理 ({'靜音' if audio_action == 'mute' else '提取音軌'})...")
+            
+            video_processor.process_media_tool_temp(
+                input_file_path=video_path,
+                action=audio_action,
+                output_path=output_path
+            )
+            
+            update_task_progress(task_id, 100, "處理完成！您現在可以選擇將其儲存至媒體中心。")
+        else:
+            raise ValueError(f"Unknown effect tool type: {tool}")
+            
+        tasks_status[task_id]["status"] = "completed"
+        tasks_status[task_id]["progress"] = 100
+        tasks_status[task_id]["message"] = "特效影片生成成功！"
+        tasks_status[task_id]["output_url"] = f"/outputs/{output_filename}"
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        tasks_status[task_id]["status"] = "failed"
+        tasks_status[task_id]["message"] = f"處理失敗: {str(e)}"
+
+@app.post("/api/effects/generate")
+async def generate_effect(req: GenerateEffectRequest, background_tasks: BackgroundTasks):
+    task_id = str(uuid.uuid4())
+    tasks_status[task_id] = {
+        "status": "processing",
+        "progress": 0,
+        "message": "已接收特效生成任務...",
+        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }
+    
+    resolved_params = {}
+    for k, v in req.params.items():
+        if isinstance(v, str) and v.startswith("library:"):
+            filename = v.split("library:")[1]
+            resolved_params[k] = get_library_file_path(filename)
+        elif isinstance(v, list):
+            resolved_list = []
+            for item in v:
+                if isinstance(item, str) and item.startswith("library:"):
+                    filename = item.split("library:")[1]
+                    resolved_list.append(get_library_file_path(filename))
+                else:
+                    resolved_list.append(item)
+            resolved_params[k] = resolved_list
+        else:
+            resolved_params[k] = v
+            
+    background_tasks.add_task(
+        run_effect_render_in_thread, task_id, req.tool, resolved_params
+    )
+    return {"status": "success", "task_id": task_id}
+
+
+class SaveEffectToLibraryRequest(BaseModel):
+    task_id: str
+    name: str
+    memo: str = ""
+
+@app.post("/api/effects/save-to-library")
+async def save_effect_to_library(req: SaveEffectToLibraryRequest):
+    task = tasks_status.get(req.task_id)
+    if not task or task.get("status") != "completed":
+        raise HTTPException(status_code=400, detail="任務尚未完成或不存在")
+        
+    output_url = task.get("output_url")
+    orig_filename = os.path.basename(output_url)
+    src_path = os.path.join(OUTPUT_DIR, orig_filename)
+    if not os.path.exists(src_path):
+        raise HTTPException(status_code=404, detail="產生的效果檔案不存在")
+        
+    ext = os.path.splitext(orig_filename)[1].lower()
+    
+    if ext == ".mp3":
+        dest_filename = f"effect_{uuid.uuid4().hex[:6]}_{orig_filename}"
+        dest_path = os.path.join(LIBRARY_DIR, "music", dest_filename)
+        db_type = "audio"
+        url_path = f"/library/music/{dest_filename}"
+    else:
+        dest_filename = f"effect_{uuid.uuid4().hex[:6]}_{orig_filename}"
+        dest_path = os.path.join(LIBRARY_DIR, "movies", dest_filename)
+        db_type = "video"
+        url_path = f"/library/movies/{dest_filename}"
+        
+    import shutil
+    try:
+        shutil.copy(src_path, dest_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"複製檔案失敗: {str(e)}")
+        
+    db = load_db()
+    db["assets"][dest_filename] = {
+        "filename": dest_filename,
+        "name": req.name,
+        "memo": req.memo or "由特效工坊生成之成果。",
+        "type": db_type,
+        "url": url_path,
+        "uploaded_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }
+    save_db(db)
+    return {"status": "success", "filename": dest_filename}
 
 
 if __name__ == "__main__":

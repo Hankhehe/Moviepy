@@ -25,11 +25,13 @@ document.addEventListener('DOMContentLoaded', () => {
     let templateFieldsMap = {}; // Tracks field objects for validation and selections
     let customScenes = [];
     let editingTemplateId = null;
+    let lastCompletedEffectTaskId = null;
 
     // View Tab Switching
     const navTabs = document.querySelectorAll('.nav-tab');
     const makerView = document.getElementById('makerView');
     const builderView = document.getElementById('builderView');
+    const effectsView = document.getElementById('effectsView');
     const mediaView = document.getElementById('mediaView');
 
     navTabs.forEach(tab => {
@@ -43,12 +45,18 @@ document.addEventListener('DOMContentLoaded', () => {
             // Switch views
             makerView.classList.remove('active');
             builderView.classList.remove('active');
+            if (effectsView) effectsView.classList.remove('active');
             mediaView.classList.remove('active');
 
             if (target === 'maker') {
                 makerView.classList.add('active');
             } else if (target === 'builder') {
                 builderView.classList.add('active');
+            } else if (target === 'effects') {
+                if (effectsView) {
+                    effectsView.classList.add('active');
+                    initEffectsView();
+                }
             } else if (target === 'media') {
                 mediaView.classList.add('active');
                 // Refresh library when opening media center
@@ -163,6 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 input.name = field.name;
                 input.className = 'form-input';
                 input.placeholder = field.placeholder || '';
+                input.value = field.default !== undefined ? field.default : '';
                 input.required = field.required;
                 formGroup.appendChild(input);
             } 
@@ -800,6 +809,12 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (key === 'visual_type') {
             customScenes[index].visual_type = val;
             renderBuilderTimeline(); // Redraw since visual type alters columns
+        } else if (key === 'audio_option') {
+            customScenes[index].audio_option = val;
+            renderBuilderTimeline(); // Redraw to toggle volume slider
+        } else if (key === 'enable_text') {
+            customScenes[index].enable_text = val;
+            renderBuilderTimeline(); // Redraw to toggle texts section
         } else {
             customScenes[index][key] = val;
         }
@@ -837,6 +852,29 @@ document.addEventListener('DOMContentLoaded', () => {
             const card = document.createElement('div');
             card.className = 'builder-scene-card';
             
+            let durationInputHtml = '';
+            if (scene.visual_type === 'user_video') {
+                const isAuto = scene.duration <= 0;
+                durationInputHtml = `
+                    <div class="scene-config-col">
+                        <label>場景時長 (秒)</label>
+                        <div style="display:flex; flex-direction:column; gap:0.4rem;">
+                            <input type="number" id="duration_input_${sIdx}" step="0.1" min="1" max="60" class="form-input" style="padding: 0.5rem; font-size:0.85rem;" value="${isAuto ? '' : scene.duration}" ${isAuto ? 'disabled placeholder="與影片同長"' : ''} oninput="updateSceneConfig(${sIdx}, 'duration', this.value)">
+                            <label style="display:inline-flex; align-items:center; gap:6px; font-size:0.75rem; font-weight:normal; margin-top:0.1rem; cursor:pointer;">
+                                <input type="checkbox" ${isAuto ? 'checked' : ''} onchange="toggleAutoDuration(${sIdx}, this.checked)"> ⏱️ 與影片同長
+                            </label>
+                        </div>
+                    </div>
+                `;
+            } else {
+                durationInputHtml = `
+                    <div class="scene-config-col">
+                        <label>場景時長 (秒)</label>
+                        <input type="number" step="0.1" min="1" max="30" class="form-input" style="padding: 0.5rem; font-size:0.85rem;" value="${scene.duration <= 0 ? 3.0 : scene.duration}" oninput="updateSceneConfig(${sIdx}, 'duration', this.value)">
+                    </div>
+                `;
+            }
+            
             let visualConfigHtml = '';
             if (scene.visual_type === 'image_zoom') {
                 visualConfigHtml = `
@@ -855,6 +893,31 @@ document.addEventListener('DOMContentLoaded', () => {
                         <input type="color" class="text-item-config" style="padding:0.1rem; height: 35px; width: 100%; cursor:pointer;" value="${scene.color}" onchange="updateSceneConfig(${sIdx}, 'color', this.value)">
                     </div>
                 `;
+            } else if (scene.visual_type === 'user_video') {
+                const audioOpt = scene.audio_option || 'keep';
+                const audioVol = scene.audio_volume !== undefined ? scene.audio_volume : 1.0;
+                
+                let volCtrlHtml = '';
+                if (audioOpt === 'volume') {
+                    volCtrlHtml = `
+                        <div style="display:flex; align-items:center; gap:0.5rem; margin-top:0.4rem;">
+                            <input type="range" min="0.0" max="2.0" step="0.1" value="${audioVol}" style="flex:1; height: 5px; cursor:pointer;" oninput="updateSceneConfig(${sIdx}, 'audio_volume', this.value); this.nextElementSibling.innerText = this.value">
+                            <span style="font-size:0.75rem; color:var(--accent-color); font-weight:700; width:24px;">${audioVol}</span>
+                        </div>
+                    `;
+                }
+                
+                visualConfigHtml = `
+                    <div class="scene-config-col">
+                        <label>聲音處理方式</label>
+                        <select class="text-item-config" style="width:100%;" onchange="updateSceneConfig(${sIdx}, 'audio_option', this.value)">
+                            <option value="keep" ${audioOpt === 'keep' ? 'selected' : ''}>🔊 保持影片原音</option>
+                            <option value="mute" ${audioOpt === 'mute' ? 'selected' : ''}>🔇 靜音 (去除聲音)</option>
+                            <option value="volume" ${audioOpt === 'volume' ? 'selected' : ''}>🎚️ 調整音量大小</option>
+                        </select>
+                        ${volCtrlHtml}
+                    </div>
+                `;
             }
             
             let textsListHtml = '';
@@ -867,9 +930,15 @@ document.addEventListener('DOMContentLoaded', () => {
                             <input type="text" class="text-item-input" value="${text.content}" placeholder="輸入文字..." oninput="updateTextConfig(${sIdx}, ${tIdx}, 'content', this.value)">
                             
                             <select class="text-item-config" style="width:auto; flex:none;" onchange="updateTextConfig(${sIdx}, ${tIdx}, 'position', this.value)">
-                                <option value="center" ${text.position === 'center' ? 'selected' : ''}>置中</option>
-                                <option value="top" ${text.position === 'top' ? 'selected' : ''}>頂部</option>
-                                <option value="bottom" ${text.position === 'bottom' ? 'selected' : ''}>底部</option>
+                                <option value="top_left" ${text.position === 'top_left' ? 'selected' : ''}>↖️ 左上</option>
+                                <option value="top_center" ${text.position === 'top_center' || text.position === 'top' ? 'selected' : ''}>⬆️ 中上</option>
+                                <option value="top_right" ${text.position === 'top_right' ? 'selected' : ''}>↗️ 右上</option>
+                                <option value="center_left" ${text.position === 'center_left' ? 'selected' : ''}>⬅️ 左中</option>
+                                <option value="center" ${text.position === 'center' || !text.position ? 'selected' : ''}>↔️ 置中</option>
+                                <option value="center_right" ${text.position === 'center_right' ? 'selected' : ''}>➡️ 右中</option>
+                                <option value="bottom_left" ${text.position === 'bottom_left' ? 'selected' : ''}>↙️ 左下</option>
+                                <option value="bottom_center" ${text.position === 'bottom_center' || text.position === 'bottom' ? 'selected' : ''}>⬇️ 中下</option>
+                                <option value="bottom_right" ${text.position === 'bottom_right' ? 'selected' : ''}>↘️ 右下</option>
                             </select>
                             
                             <input type="color" class="text-item-config" style="padding: 0.1rem; height: 32px; width: 45px; flex:none; cursor:pointer;" value="${text.color}" onchange="updateTextConfig(${sIdx}, ${tIdx}, 'color', this.value)">
@@ -884,6 +953,21 @@ document.addEventListener('DOMContentLoaded', () => {
                     `;
                 });
             }
+
+            let textsSectionHtml = '';
+            if (scene.enable_text !== false) {
+                textsSectionHtml = `
+                    <div class="scene-texts-section" style="margin-top: 1rem; border-top: 1px dashed rgba(255,255,255,0.06); padding-top: 1rem;">
+                        <div class="texts-header">
+                            <h4>📝 文字疊加時序</h4>
+                            <button type="button" class="add-text-btn" onclick="addSceneText(${sIdx})">＋ 新增文字</button>
+                        </div>
+                        <div class="texts-list">
+                            ${textsListHtml}
+                        </div>
+                    </div>
+                `;
+            }
             
             card.innerHTML = `
                 <div class="scene-card-header">
@@ -892,10 +976,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
                 
                 <div class="scene-config-row">
-                    <div class="scene-config-col">
-                        <label>場景時長 (秒)</label>
-                        <input type="number" step="0.1" min="1" max="15" class="form-input" style="padding: 0.5rem; font-size:0.85rem;" value="${scene.duration}" oninput="updateSceneConfig(${sIdx}, 'duration', this.value)">
-                    </div>
+                    ${durationInputHtml}
                     
                     <div class="scene-config-col">
                         <label>視覺功能類型</label>
@@ -905,19 +986,19 @@ document.addEventListener('DOMContentLoaded', () => {
                             <option value="solid_color" ${scene.visual_type === 'solid_color' ? 'selected' : ''}>🎨 單色背景影格</option>
                         </select>
                     </div>
+
+                    <div class="scene-config-col">
+                        <label>添加文字疊加</label>
+                        <select class="text-item-config" style="width:100%;" onchange="updateSceneConfig(${sIdx}, 'enable_text', this.value === 'yes')">
+                            <option value="yes" ${scene.enable_text !== false ? 'selected' : ''}>✍️ 啟用文字疊加</option>
+                            <option value="no" ${scene.enable_text === false ? 'selected' : ''}>🚫 停用文字疊加</option>
+                        </select>
+                    </div>
                     
                     ${visualConfigHtml}
                 </div>
                 
-                <div class="scene-texts-section">
-                    <div class="texts-header">
-                        <h4>📝 文字疊加時序</h4>
-                        <button type="button" class="add-text-btn" onclick="addSceneText(${sIdx})">＋ 新增文字</button>
-                    </div>
-                    <div class="texts-list">
-                        ${textsListHtml}
-                    </div>
-                </div>
+                ${textsSectionHtml}
             `;
             
             scenesTimeline.appendChild(card);
@@ -939,6 +1020,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Reset form inputs
         document.getElementById('builderForm').reset();
+        document.getElementById('builderTransition').value = 'none';
         customScenes = [];
         renderBuilderTimeline();
         
@@ -974,6 +1056,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('builderName').value = customTpl.name || '';
             document.getElementById('builderDesc').value = customTpl.description || '';
             document.getElementById('builderRatio').value = customTpl.aspect_ratio || '9:16';
+            document.getElementById('builderTransition').value = customTpl.transition_effect || 'none';
             
             // Populate scenes (deep copy)
             customScenes = JSON.parse(JSON.stringify(customTpl.scenes || []));
@@ -1024,11 +1107,13 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         
+        const transitionInput = document.getElementById('builderTransition');
         const payload = {
             id: editingTemplateId,
             name: name,
             description: descInput.value.trim(),
             aspect_ratio: ratioInput.value,
+            transition_effect: transitionInput ? transitionInput.value : 'none',
             scenes: customScenes
         };
         
@@ -1057,6 +1142,79 @@ document.addEventListener('DOMContentLoaded', () => {
             
         } catch (error) {
             alert(`發佈錯誤: ${error.message}`);
+        }
+    };
+
+    window.toggleAutoDuration = function(sIdx, isChecked) {
+        if (isChecked) {
+            customScenes[sIdx].duration = -1;
+        } else {
+            customScenes[sIdx].duration = 3.0;
+        }
+        renderBuilderTimeline();
+    };
+
+    window.openSaveEffectModal = function() {
+        if (!lastCompletedEffectTaskId) {
+            alert('沒有可儲存的特效處理成果！');
+            return;
+        }
+
+        const tool = document.getElementById('effectToolSelect').value;
+        let toolName = '特效成果';
+        if (tool === 'image_blend') toolName = '兩圖漸變合成';
+        else if (tool === 'image_filter') toolName = '單圖濾鏡效果';
+        else if (tool === 'multi_transition') toolName = '多圖相片轉場';
+        else if (tool === 'alpha_blend') toolName = '雙層半透明合成';
+        else if (tool === 'grid_layout') toolName = 'N宮格畫面拼接';
+        else if (tool === 'audio_handler') {
+            const action = document.querySelector('input[name="audio_action"]:checked').value;
+            toolName = action === 'mute' ? '影片靜音' : '提取音軌';
+        }
+
+        const now = new Date();
+        const dateStr = `${now.getFullYear()}${(now.getMonth()+1).toString().padStart(2,'0')}${now.getDate().toString().padStart(2,'0')}`;
+        
+        document.getElementById('saveEffectName').value = `${toolName}_${dateStr}`;
+        document.getElementById('saveEffectMemo').value = `由特效工坊的「${toolName}」工具生成。`;
+        document.getElementById('saveEffectModal').classList.add('active');
+    };
+
+    window.closeSaveEffectModal = function() {
+        document.getElementById('saveEffectForm').reset();
+        document.getElementById('saveEffectModal').classList.remove('active');
+    };
+
+    window.submitSaveEffectToLibrary = async function() {
+        if (!lastCompletedEffectTaskId) return;
+
+        const name = document.getElementById('saveEffectName').value.trim();
+        const memo = document.getElementById('saveEffectMemo').value.trim();
+
+        if (!name) {
+            alert('請輸入素材名稱！');
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/effects/save-to-library', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    task_id: lastCompletedEffectTaskId,
+                    name: name,
+                    memo: memo
+                })
+            });
+
+            if (!res.ok) throw new Error('儲存失敗');
+            alert('🎉 素材已成功儲存至您的媒體庫！');
+            closeSaveEffectModal();
+            loadLibrary(); // Reload Media Center gallery to show new asset
+        } catch (error) {
+            alert(`儲存至媒體庫時出錯: ${error.message}`);
         }
     };
 
@@ -1271,6 +1429,51 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         const fieldName = currentSelectField;
+        
+        if (fieldName.startsWith('effect_')) {
+            const displayInput = document.getElementById(fieldName);
+            const hiddenInput = document.getElementById(`hidden_${fieldName}`);
+            const previewContainer = document.getElementById(`preview_${fieldName}`);
+            
+            hiddenInput.value = selectedLibraryItems.map(item => `library:${item}`).join(',');
+            displayInput.value = selectedLibraryItems.join(', ');
+            
+            function getFileType(filename) {
+                const ext = filename.split('.').pop().toLowerCase();
+                if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) return 'image';
+                if (['mp4', 'mov', 'avi', 'mkv', 'webm'].includes(ext)) return 'video';
+                if (['mp3', 'wav', 'ogg', 'm4a'].includes(ext)) return 'audio';
+                return 'image';
+            }
+            
+            previewContainer.innerHTML = '';
+            selectedLibraryItems.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'file-preview-card';
+                
+                let type = getFileType(item);
+                let url = `/library/${type === 'image' ? 'photos' : type === 'video' ? 'movies' : 'music'}/${item}`;
+                
+                let mediaHtml = '';
+                if (type === 'image') {
+                    mediaHtml = `<img src="${url}" style="width:30px; height:30px; object-fit:cover; border-radius:4px;">`;
+                } else if (type === 'video') {
+                    mediaHtml = `<video src="${url}" style="width:30px; height:30px; object-fit:cover; border-radius:4px;" muted></video>`;
+                } else {
+                    mediaHtml = `<div style="font-size:1.2rem;">🎵</div>`;
+                }
+                
+                card.innerHTML = `
+                    ${mediaHtml}
+                    <span style="font-size:0.75rem; color:#e5e7eb; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:120px;">${item}</span>
+                `;
+                previewContainer.appendChild(card);
+            });
+            
+            closeLibrarySelectModal();
+            return;
+        }
+        
         const hiddenInput = document.getElementById(`library_input_${fieldName}`);
         const fileInput = document.querySelector(`#group_${fieldName} .file-input`);
         const previewContainer = document.getElementById(`preview_${fieldName}`);
@@ -1329,4 +1532,419 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
     };
+
+    // === Effects Lab (特效工坊) Logic ===
+    let effectPollInterval = null;
+
+    window.initEffectsView = function() {
+        const select = document.getElementById('effectToolSelect');
+        if (select) {
+            switchEffectTool(select.value);
+        }
+    };
+
+    window.switchEffectTool = function(toolName) {
+        const fieldsContainer = document.getElementById('effectFields');
+        if (!fieldsContainer) return;
+
+        resetEffectStatus();
+
+        let html = '';
+        if (toolName === 'image_blend') {
+            html = `
+                <div class="form-group" id="group_effect_image1">
+                    <label>第一張圖片 (Image 1) *</label>
+                    <div style="display:flex; gap:0.5rem; align-items:center;">
+                        <input type="text" readonly id="effect_image1" required placeholder="點擊右側按鈕從媒體庫選取" class="form-input">
+                        <button type="button" class="select-library-btn" style="position:relative; z-index:10; white-space:nowrap; background:var(--gradient-accent); border:none; color:white; padding:0.6rem 0.8rem; border-radius:8px; font-size:0.8rem; cursor:pointer;" onclick="openLibrarySelect('effect_image1', false, 'image/*')">📂 選擇</button>
+                    </div>
+                    <input type="hidden" id="hidden_effect_image1">
+                    <div class="file-preview-container" id="preview_effect_image1" style="margin-top:0.5rem;"></div>
+                </div>
+                
+                <div class="form-group" id="group_effect_image2">
+                    <label>第二張圖片 (Image 2) *</label>
+                    <div style="display:flex; gap:0.5rem; align-items:center;">
+                        <input type="text" readonly id="effect_image2" required placeholder="點擊右側按鈕從媒體庫選取" class="form-input">
+                        <button type="button" class="select-library-btn" style="position:relative; z-index:10; white-space:nowrap; background:var(--gradient-accent); border:none; color:white; padding:0.6rem 0.8rem; border-radius:8px; font-size:0.8rem; cursor:pointer;" onclick="openLibrarySelect('effect_image2', false, 'image/*')">📂 選擇</button>
+                    </div>
+                    <input type="hidden" id="hidden_effect_image2">
+                    <div class="file-preview-container" id="preview_effect_image2" style="margin-top:0.5rem;"></div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="effect_duration">影片長度 (秒)</label>
+                    <input type="number" step="0.5" min="2" max="15" value="5.0" id="effect_duration" required class="form-input">
+                </div>
+                
+                <div class="form-group">
+                    <label for="effect_fade_duration">漸變交疊時長 (秒)</label>
+                    <input type="number" step="0.1" min="0.2" max="3" value="1.0" id="effect_fade_duration" required class="form-input">
+                </div>
+            `;
+        } else if (toolName === 'image_filter') {
+            html = `
+                <div class="form-group" id="group_effect_image">
+                    <label>選擇圖片素材 *</label>
+                    <div style="display:flex; gap:0.5rem; align-items:center;">
+                        <input type="text" readonly id="effect_image" required placeholder="點擊右側按鈕從媒體庫選取" class="form-input">
+                        <button type="button" class="select-library-btn" style="position:relative; z-index:10; white-space:nowrap; background:var(--gradient-accent); border:none; color:white; padding:0.6rem 0.8rem; border-radius:8px; font-size:0.8rem; cursor:pointer;" onclick="openLibrarySelect('effect_image', false, 'image/*')">📂 選擇</button>
+                    </div>
+                    <input type="hidden" id="hidden_effect_image">
+                    <div class="file-preview-container" id="preview_effect_image" style="margin-top:0.5rem;"></div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="effect_filter_type">套用特效濾鏡</label>
+                    <select id="effect_filter_type" class="form-select">
+                        <option value="ken_burns">🔍 鏡頭慢速放大 (Ken Burns)</option>
+                        <option value="mirror_x">🪞 水平鏡像翻轉 (Mirror X)</option>
+                        <option value="sepia">📻 復古懷舊濾鏡 (Sepia)</option>
+                        <option value="grayscale">🔳 時尚黑白濾鏡 (Grayscale)</option>
+                        <option value="fade">🌫️ 漸顯漸隱效果 (Fade In/Out)</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="effect_duration">影片長度 (秒)</label>
+                    <input type="number" step="0.5" min="2" max="15" value="4.0" id="effect_duration" required class="form-input">
+                </div>
+            `;
+        } else if (toolName === 'multi_transition') {
+            html = `
+                <div class="form-group" id="group_effect_images">
+                    <label>選擇多張圖片 (複選) *</label>
+                    <div style="display:flex; gap:0.5rem; align-items:center;">
+                        <input type="text" readonly id="effect_images" required placeholder="從媒體庫選取 2 張以上相片" class="form-input">
+                        <button type="button" class="select-library-btn" style="position:relative; z-index:10; white-space:nowrap; background:var(--gradient-accent); border:none; color:white; padding:0.6rem 0.8rem; border-radius:8px; font-size:0.8rem; cursor:pointer;" onclick="openLibrarySelect('effect_images', true, 'image/*')">📂 選擇</button>
+                    </div>
+                    <input type="hidden" id="hidden_effect_images">
+                    <div class="file-preview-container" id="preview_effect_images" style="margin-top:0.5rem;"></div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="effect_transition_type">轉場類型</label>
+                    <select id="effect_transition_type" class="form-select">
+                        <option value="crossfade">交叉淡入淡出 (Crossfade)</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="effect_slide_duration">每張相片停留時間 (秒)</label>
+                    <input type="number" step="0.5" min="1.5" max="10" value="3.0" id="effect_slide_duration" required class="form-input">
+                </div>
+                
+                <div class="form-group">
+                    <label for="effect_transition_duration">轉場特效時長 (秒)</label>
+                    <input type="number" step="0.1" min="0.2" max="3" value="1.0" id="effect_transition_duration" required class="form-input">
+                </div>
+            `;
+        } else if (toolName === 'alpha_blend') {
+            html = `
+                <div class="form-group" id="group_effect_media1">
+                    <label>底層素材 (底圖或底層影片) *</label>
+                    <div style="display:flex; gap:0.5rem; align-items:center;">
+                        <input type="text" readonly id="effect_media1" required placeholder="從媒體庫選取圖片或影片" class="form-input">
+                        <button type="button" class="select-library-btn" style="position:relative; z-index:10; white-space:nowrap; background:var(--gradient-accent); border:none; color:white; padding:0.6rem 0.8rem; border-radius:8px; font-size:0.8rem; cursor:pointer;" onclick="openLibrarySelect('effect_media1', false, 'image/*,video/*')">📂 選擇</button>
+                    </div>
+                    <input type="hidden" id="hidden_effect_media1">
+                    <div class="file-preview-container" id="preview_effect_media1" style="margin-top:0.5rem;"></div>
+                </div>
+                
+                <div class="form-group" id="group_effect_media2">
+                    <label>頂層素材 (上層疊加圖片或影片) *</label>
+                    <div style="display:flex; gap:0.5rem; align-items:center;">
+                        <input type="text" readonly id="effect_media2" required placeholder="從媒體庫選取圖片或影片" class="form-input">
+                        <button type="button" class="select-library-btn" style="position:relative; z-index:10; white-space:nowrap; background:var(--gradient-accent); border:none; color:white; padding:0.6rem 0.8rem; border-radius:8px; font-size:0.8rem; cursor:pointer;" onclick="openLibrarySelect('effect_media2', false, 'image/*,video/*')">📂 選擇</button>
+                    </div>
+                    <input type="hidden" id="hidden_effect_media2">
+                    <div class="file-preview-container" id="preview_effect_media2" style="margin-top:0.5rem;"></div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="effect_opacity">頂層疊加透明度 (Opacity)</label>
+                    <div style="display:flex; align-items:center; gap:0.8rem;">
+                        <input type="range" min="0.1" max="0.9" step="0.05" value="0.5" id="effect_opacity" class="form-range" style="flex:1;" oninput="this.nextElementSibling.innerText = this.value">
+                        <span style="color:var(--accent-color); font-weight:700; width:30px;">0.5</span>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="effect_duration">影片長度 (秒)</label>
+                    <input type="number" step="0.5" min="2" max="15" value="5.0" id="effect_duration" required class="form-input">
+                </div>
+            `;
+        } else if (toolName === 'grid_layout') {
+            html = `
+                <div class="form-group" id="group_effect_medias">
+                    <label>選擇多個宮格素材 (複選，支援圖片與影片) *</label>
+                    <div style="display:flex; gap:0.5rem; align-items:center;">
+                        <input type="text" readonly id="effect_medias" required placeholder="從媒體庫選取 2 個以上素材" class="form-input">
+                        <button type="button" class="select-library-btn" style="position:relative; z-index:10; white-space:nowrap; background:var(--gradient-accent); border:none; color:white; padding:0.6rem 0.8rem; border-radius:8px; font-size:0.8rem; cursor:pointer;" onclick="openLibrarySelect('effect_medias', true, 'image/*,video/*')">📂 選擇</button>
+                    </div>
+                    <input type="hidden" id="hidden_effect_medias">
+                    <div class="file-preview-container" id="preview_effect_medias" style="margin-top:0.5rem;"></div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="effect_cols">欄數 (Columns)</label>
+                    <select id="effect_cols" class="form-select">
+                        <option value="2" selected>2 欄</option>
+                        <option value="3">3 欄</option>
+                        <option value="1">1 欄</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="effect_rows">列數 (Rows)</label>
+                    <select id="effect_rows" class="form-select">
+                        <option value="2" selected>2 列 (適合4宮格)</option>
+                        <option value="3">3 列 (適合9宮格)</option>
+                        <option value="1">1 列</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="effect_gap">格線間距 (像素)</label>
+                    <input type="number" min="0" max="30" value="4" id="effect_gap" required class="form-input">
+                </div>
+                
+                <div class="form-group">
+                    <label for="effect_duration">影片長度 (秒)</label>
+                    <input type="number" step="0.5" min="2" max="15" value="5.0" id="effect_duration" required class="form-input">
+                </div>
+            `;
+        } else if (toolName === 'audio_handler') {
+            html = `
+                <div class="form-group" id="group_effect_video">
+                    <label>選擇來源影片 *</label>
+                    <div style="display:flex; gap:0.5rem; align-items:center;">
+                        <input type="text" readonly id="effect_video" required placeholder="點擊右側按鈕從媒體庫選取影片" class="form-input">
+                        <button type="button" class="select-library-btn" style="position:relative; z-index:10; white-space:nowrap; background:var(--gradient-accent); border:none; color:white; padding:0.6rem 0.8rem; border-radius:8px; font-size:0.8rem; cursor:pointer;" onclick="openLibrarySelect('effect_video', false, 'video/*')">📂 選擇</button>
+                    </div>
+                    <input type="hidden" id="hidden_effect_video">
+                    <div class="file-preview-container" id="preview_effect_video" style="margin-top:0.5rem;"></div>
+                </div>
+                
+                <div class="form-group">
+                    <label>處理功能</label>
+                    <div class="radio-group" style="display:flex; flex-direction:column; gap:0.6rem; margin-top:0.4rem;">
+                        <label style="display:flex; align-items:center; gap:8px; font-size:0.9rem; font-weight:normal; cursor:pointer;">
+                            <input type="radio" name="audio_action" value="mute" checked style="accent-color:var(--accent-color);"> 🔇 去除聲音 (靜音影片)
+                        </label>
+                        <label style="display:flex; align-items:center; gap:8px; font-size:0.9rem; font-weight:normal; cursor:pointer;">
+                            <input type="radio" name="audio_action" value="extract" style="accent-color:var(--accent-color);"> 🎵 只留下聲音 (提取音訊檔)
+                        </label>
+                    </div>
+                </div>
+            `;
+        }
+
+        fieldsContainer.innerHTML = html;
+    };
+
+    function resetEffectStatus() {
+        if (effectPollInterval) clearInterval(effectPollInterval);
+        document.getElementById('effectPlaceholder').style.display = 'block';
+        document.getElementById('effectProgressArea').style.display = 'none';
+        document.getElementById('effectPreviewArea').style.display = 'none';
+        
+        const videoPlayer = document.getElementById('effectVideoPlayer');
+        if (videoPlayer) {
+            videoPlayer.pause();
+            videoPlayer.src = '';
+        }
+    }
+
+    window.generateEffectVideo = async function() {
+        const tool = document.getElementById('effectToolSelect').value;
+        const params = {};
+
+        if (tool === 'image_blend') {
+            const img1 = document.getElementById('hidden_effect_image1').value;
+            const img2 = document.getElementById('hidden_effect_image2').value;
+            const duration = parseFloat(document.getElementById('effect_duration').value);
+            const fadeDuration = parseFloat(document.getElementById('effect_fade_duration').value);
+
+            if (!img1 || !img2) {
+                alert('請選擇兩張圖片素材！');
+                return;
+            }
+            if (fadeDuration >= duration / 2) {
+                alert('漸變交疊時長不得大於或等於單張圖片播放時長！');
+                return;
+            }
+
+            params.image1 = img1;
+            params.image2 = img2;
+            params.duration = duration;
+            params.fade_duration = fadeDuration;
+
+        } else if (tool === 'image_filter') {
+            const img = document.getElementById('hidden_effect_image').value;
+            const filterType = document.getElementById('effect_filter_type').value;
+            const duration = parseFloat(document.getElementById('effect_duration').value);
+
+            if (!img) {
+                alert('請選擇一張圖片素材！');
+                return;
+            }
+
+            params.image = img;
+            params.filter_type = filterType;
+            params.duration = duration;
+
+        } else if (tool === 'multi_transition') {
+            const imgsVal = document.getElementById('hidden_effect_images').value;
+            const transitionType = document.getElementById('effect_transition_type').value;
+            const slideDuration = parseFloat(document.getElementById('effect_slide_duration').value);
+            const transitionDuration = parseFloat(document.getElementById('effect_transition_duration').value);
+
+            if (!imgsVal) {
+                alert('請選擇相片素材！');
+                return;
+            }
+
+            const images = imgsVal.split(',');
+            if (images.length < 2) {
+                alert('多圖轉場拼貼至少需要選取 2 張相片！');
+                return;
+            }
+            if (transitionDuration >= slideDuration) {
+                alert('轉場時長不能大於或等於單張停留時間！');
+                return;
+            }
+
+            params.images = images;
+            params.transition_type = transitionType;
+            params.slide_duration = slideDuration;
+            params.transition_duration = transitionDuration;
+        } else if (tool === 'alpha_blend') {
+            const media1 = document.getElementById('hidden_effect_media1').value;
+            const media2 = document.getElementById('hidden_effect_media2').value;
+            const opacity = parseFloat(document.getElementById('effect_opacity').value);
+            const duration = parseFloat(document.getElementById('effect_duration').value);
+
+            if (!media1 || !media2) {
+                alert('請選擇底層與頂層素材！');
+                return;
+            }
+
+            params.media1 = media1;
+            params.media2 = media2;
+            params.opacity = opacity;
+            params.duration = duration;
+
+        } else if (tool === 'grid_layout') {
+            const mediasVal = document.getElementById('hidden_effect_medias').value;
+            const cols = parseInt(document.getElementById('effect_cols').value);
+            const rows = parseInt(document.getElementById('effect_rows').value);
+            const gap = parseInt(document.getElementById('effect_gap').value);
+            const duration = parseFloat(document.getElementById('effect_duration').value);
+
+            if (!mediasVal) {
+                alert('請選擇宮格素材！');
+                return;
+            }
+
+            const medias = mediasVal.split(',');
+            if (medias.length < 1) {
+                alert('請選取至少 1 個素材！');
+                return;
+            }
+
+            params.medias = medias;
+            params.cols = cols;
+            params.rows = rows;
+            params.gap = gap;
+            params.duration = duration;
+        } else if (tool === 'audio_handler') {
+            const video = document.getElementById('hidden_effect_video').value;
+            const audioAction = document.querySelector('input[name="audio_action"]:checked').value;
+
+            if (!video) {
+                alert('請選擇來源影片素材！');
+                return;
+            }
+
+            params.video = video;
+            params.audio_action = audioAction;
+        }
+
+        document.getElementById('effectPlaceholder').style.display = 'none';
+        document.getElementById('effectProgressArea').style.display = 'block';
+        document.getElementById('effectPreviewArea').style.display = 'none';
+        document.getElementById('effectProgressBarFill').style.width = '0%';
+        document.getElementById('effectProgressPercent').innerText = '0%';
+        document.getElementById('effectProgressTitle').innerText = '正在提交任務...';
+
+        try {
+            const res = await fetch('/api/effects/generate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    tool: tool,
+                    params: params
+                })
+            });
+
+            if (!res.ok) throw new Error('提交特效合成失敗');
+            const data = await res.json();
+            const taskId = data.task_id;
+
+            pollEffectTaskProgress(taskId);
+
+        } catch (error) {
+            alert(`合成失敗: ${error.message}`);
+            resetEffectStatus();
+        }
+    };
+
+    function pollEffectTaskProgress(taskId) {
+        if (effectPollInterval) clearInterval(effectPollInterval);
+
+        const fill = document.getElementById('effectProgressBarFill');
+        const percent = document.getElementById('effectProgressPercent');
+        const title = document.getElementById('effectProgressTitle');
+
+        effectPollInterval = setInterval(async () => {
+            try {
+                const res = await fetch(`/api/status/${taskId}`);
+                if (!res.ok) throw new Error('任務輪詢失敗');
+                const task = await res.json();
+
+                fill.style.width = `${task.progress}%`;
+                percent.innerText = `${task.progress}%`;
+                title.innerText = task.message || '正在渲染特效影片...';
+
+                if (task.status === 'completed') {
+                    clearInterval(effectPollInterval);
+                    
+                    document.getElementById('effectProgressArea').style.display = 'none';
+                    document.getElementById('effectPreviewArea').style.display = 'block';
+                    
+                    const videoPlayer = document.getElementById('effectVideoPlayer');
+                    const downloadBtn = document.getElementById('effectDownloadBtn');
+                    
+                    videoPlayer.src = task.output_url;
+                    videoPlayer.load();
+                    videoPlayer.play();
+                    
+                    downloadBtn.href = task.output_url;
+                    const ext = task.output_url.endsWith('.mp3') ? '.mp3' : '.mp4';
+                    downloadBtn.download = `effect_${taskId}${ext}`;
+                    
+                    lastCompletedEffectTaskId = taskId;
+                } else if (task.status === 'failed') {
+                    clearInterval(effectPollInterval);
+                    alert(`影片特效生成失敗: ${task.message}`);
+                    resetEffectStatus();
+                }
+            } catch (error) {
+                console.error('Polling error:', error);
+            }
+        }, 1000);
+    }
 });

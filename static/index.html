@@ -24,6 +24,7 @@
             <nav class="header-nav">
                 <button class="nav-tab active" data-tab="maker">影片製作</button>
                 <button class="nav-tab" data-tab="builder">範本自訂工坊</button>
+                <button class="nav-tab" data-tab="effects">✨ 特效工坊</button>
                 <button class="nav-tab" data-tab="media">媒體中心</button>
             </nav>
         </div>
@@ -125,6 +126,14 @@
                                     <option value="16:9">16:9 橫式 (YouTube/簡報影片)</option>
                                 </select>
                             </div>
+                            <div class="form-group">
+                                <label for="builderTransition">全域影片場景轉場 *</label>
+                                <select id="builderTransition" class="form-select">
+                                    <option value="none">無效果 (直接切換)</option>
+                                    <option value="fade">🎬 黑色淡出淡入 (Fade In/Out)</option>
+                                    <option value="crossfade">🎛️ 疊加交叉淡化 (Crossfade - 推薦)</option>
+                                </select>
+                            </div>
                             <button type="submit" class="submit-btn" id="builderSubmitBtn" style="background: linear-gradient(135deg, var(--accent-color), var(--neon-blue)); border: none; box-shadow: 0 4px 12px var(--accent-glow);">
                                 💾 儲存並發佈範本
                             </button>
@@ -196,6 +205,75 @@
             </section>
         </div>
 
+        <!-- Panel 4: Effects Lab (特效工坊) -->
+        <div id="effectsView" class="view-panel">
+            <section class="builder-section">
+                <div class="builder-container">
+                    
+                    <!-- Left Sidebar - Effects Settings -->
+                    <div class="builder-sidebar" style="min-width: 320px;">
+                        <h2 class="builder-sidebar-title">✨ 影片特效工坊</h2>
+                        <div class="form-group">
+                            <label for="effectToolSelect">選擇特效工具</label>
+                            <select id="effectToolSelect" class="form-select" onchange="switchEffectTool(this.value)">
+                                <option value="image_blend">🖼️ 兩圖漸變合成 (Image Blend)</option>
+                                <option value="image_filter">🎨 單圖鏡頭與濾鏡 (Image Effects)</option>
+                                <option value="multi_transition">🎞️ 多圖相片轉場 (Multi-image Joiner)</option>
+                                <option value="alpha_blend">🌫️ 雙層半透明合成 (Alpha Blend)</option>
+                                <option value="grid_layout">📱 N 宮格畫面拼接 (Grid Split Screen)</option>
+                                <option value="audio_handler">🔊 影片聲音抽取與靜音 (Audio Tools)</option>
+                            </select>
+                        </div>
+                        
+                        <form id="effectForm" onsubmit="event.preventDefault(); generateEffectVideo();">
+                            <!-- Dynamic fields container for effect tools -->
+                            <div id="effectFields"></div>
+                            
+                            <button type="submit" class="submit-btn" style="margin-top: 1.5rem; background: linear-gradient(135deg, var(--neon-blue), var(--accent-color)); border: none; box-shadow: 0 4px 12px var(--accent-glow);">
+                                ✨ 開始合成特效影片
+                            </button>
+                        </form>
+                    </div>
+                    
+                    <!-- Right Area - Rendering Status & Preview -->
+                    <div class="builder-timeline" style="display: flex; flex-direction: column; min-height: 400px; padding: 2rem;">
+                        <h3 style="margin-bottom: 1.5rem;">🎬 特效影片生成與預覽</h3>
+                        
+                        <div id="effectStatusContainer" style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(255,255,255,0.02); border: 1px dashed rgba(255,255,255,0.06); border-radius: 16px; padding: 2rem; text-align: center;">
+                            <div id="effectPlaceholder">
+                                <div style="font-size: 3rem; margin-bottom: 1rem;">✨</div>
+                                <h4 style="color: white; margin-bottom: 0.5rem;">設定左側參數並點擊「開始合成」</h4>
+                                <p style="color: var(--text-secondary); max-width: 400px; font-size: 0.9rem;">系統將調用 Moviepy 處理像素濾鏡與漸變特效，為您生成專屬短片。</p>
+                            </div>
+                            
+                            <!-- Rendering progress bar (hidden by default) -->
+                            <div id="effectProgressArea" style="display: none; width: 100%; max-width: 400px;">
+                                <div class="progress-loader" style="margin: 0 auto 1.5rem;"></div>
+                                <h4 style="color: white; margin-bottom: 0.5rem;" id="effectProgressTitle">正在處理中...</h4>
+                                <div class="progress-bar-container" style="margin-bottom: 0.8rem;">
+                                    <div class="progress-bar-fill" id="effectProgressBarFill" style="width: 0%;"></div>
+                                </div>
+                                <span id="effectProgressPercent" style="color: var(--accent-color); font-weight: 700;">0%</span>
+                            </div>
+                            
+                            <!-- Rendered video preview player (hidden by default) -->
+                            <div id="effectPreviewArea" style="display: none; width: 100%; max-width: 640px;">
+                                <video id="effectVideoPlayer" controls style="width: 100%; border-radius: 12px; border: 1px solid var(--card-border); margin-bottom: 1.5rem; background: black;"></video>
+                                <div style="display: flex; justify-content: center; gap: 1rem;">
+                                    <a href="#" class="modal-btn save-btn" id="effectDownloadBtn" download style="text-decoration: none; display: inline-flex; align-items: center; gap: 8px;">
+                                        📥 下載特效檔案
+                                    </a>
+                                    <button type="button" class="modal-btn save-btn" id="effectSaveLibBtn" style="display: inline-flex; align-items: center; gap: 8px; background: linear-gradient(135deg, var(--neon-green), #059669); border: none; box-shadow: 0 4px 12px rgba(16,185,129,0.25);" onclick="openSaveEffectModal()">
+                                        💾 儲存至媒體中心
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
         <!-- Edit Modal Dialog -->
         <div class="modal-overlay" id="editModal">
             <div class="modal-card">
@@ -261,6 +339,30 @@
                     <button type="button" class="modal-btn cancel-btn" onclick="closeLibrarySelectModal()">取消</button>
                     <button type="button" class="modal-btn save-btn" id="confirmLibrarySelectBtn">確定選擇</button>
                 </div>
+            </div>
+        </div>
+
+        <!-- Save Effect Modal -->
+        <div class="modal-overlay" id="saveEffectModal">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <h3>💾 儲存成果至媒體中心</h3>
+                    <button type="button" class="close-modal-btn" onclick="closeSaveEffectModal()">×</button>
+                </div>
+                <form id="saveEffectForm" onsubmit="event.preventDefault(); submitSaveEffectToLibrary();">
+                    <div class="form-group">
+                        <label for="saveEffectName">素材名稱 *</label>
+                        <input type="text" id="saveEffectName" required placeholder="例如：自訂濾鏡影片">
+                    </div>
+                    <div class="form-group">
+                        <label for="saveEffectMemo">備註描述</label>
+                        <textarea id="saveEffectMemo" rows="3" placeholder="為此生成的特效素材加上備註..."></textarea>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="modal-btn cancel-btn" onclick="closeSaveEffectModal()">取消</button>
+                        <button type="submit" class="modal-btn save-btn">確定儲存</button>
+                    </div>
+                </form>
             </div>
         </div>
 
