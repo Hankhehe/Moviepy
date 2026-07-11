@@ -24,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let selectedFilesMap = {}; // Tracks selected files for drag & drop zones
     let templateFieldsMap = {}; // Tracks field objects for validation and selections
     let customScenes = [];
+    let editingTemplateId = null;
 
     // View Tab Switching
     const navTabs = document.querySelectorAll('.nav-tab');
@@ -78,6 +79,21 @@ document.addEventListener('DOMContentLoaded', () => {
         templates.forEach(tpl => {
             const card = document.createElement('div');
             card.className = 'template-card';
+            
+            let customActionsHtml = '';
+            if (tpl.id.startsWith('custom_')) {
+                customActionsHtml = `
+                    <div class="custom-template-actions" style="display: flex; gap: 8px; margin-top: 0.5rem; width: 100%;">
+                        <button class="edit-template-btn" data-id="${tpl.id}" style="flex: 1; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; border-radius: 12px; padding: 0.6rem; font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 4px; cursor: pointer; transition: all 0.2s ease;">
+                            ✏️ 編輯
+                        </button>
+                        <button class="delete-template-btn" data-id="${tpl.id}" style="flex: 1; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.15); color: #f87171; border-radius: 12px; padding: 0.6rem; font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 4px; cursor: pointer; transition: all 0.2s ease;">
+                            🗑️ 刪除
+                        </button>
+                    </div>
+                `;
+            }
+            
             card.innerHTML = `
                 <div class="video-preview-wrapper">
                     <video src="${tpl.preview_url}" autoplay loop muted playsinline></video>
@@ -89,6 +105,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         使用此範本
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
                     </button>
+                    ${customActionsHtml}
                 </div>
             `;
             
@@ -96,6 +113,17 @@ document.addEventListener('DOMContentLoaded', () => {
             card.querySelector('.select-template-btn').addEventListener('click', () => {
                 selectTemplate(tpl.id);
             });
+            
+            if (tpl.id.startsWith('custom_')) {
+                card.querySelector('.edit-template-btn').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    editCustomTemplate(tpl.id);
+                });
+                card.querySelector('.delete-template-btn').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    deleteCustomTemplate(tpl.id);
+                });
+            }
             
             templatesGrid.appendChild(card);
         });
@@ -163,7 +191,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Add select from library button
                 let libraryBtnHtml = '';
                 if (field.accept.includes('image') || field.accept.includes('video') || field.accept.includes('audio')) {
-                    libraryBtnHtml = `<button type="button" class="select-library-btn" style="margin-top: 0.5rem; background: var(--gradient-accent); border: none; color: white; padding: 0.35rem 0.8rem; border-radius: 8px; font-size: 0.8rem; cursor: pointer; transition: transform 0.2s;" onclick="openLibrarySelect('${field.name}', ${field.multiple || false}, '${field.accept}')">📂 從媒體庫選擇</button>`;
+                    libraryBtnHtml = `<button type="button" class="select-library-btn" style="position: relative; z-index: 10; margin-top: 0.5rem; background: var(--gradient-accent); border: none; color: white; padding: 0.35rem 0.8rem; border-radius: 8px; font-size: 0.8rem; cursor: pointer; transition: transform 0.2s;" onclick="openLibrarySelect('${field.name}', ${field.multiple || false}, '${field.accept}')">📂 從媒體庫選擇</button>`;
                 }
 
                 dropzone.innerHTML = `
@@ -896,6 +924,90 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    function updateBuilderUIForEditing(templateName) {
+        const titleEl = document.getElementById('builderSidebarTitle');
+        const submitBtn = document.getElementById('builderSubmitBtn');
+        const cancelBtn = document.getElementById('builderCancelBtn');
+        
+        if (titleEl) titleEl.innerText = `✏️ 編輯自訂範本`;
+        if (submitBtn) submitBtn.innerText = `💾 儲存修改並更新範本`;
+        if (cancelBtn) cancelBtn.style.display = 'block';
+    }
+
+    function cancelBuilderEditState() {
+        editingTemplateId = null;
+        
+        // Reset form inputs
+        document.getElementById('builderForm').reset();
+        customScenes = [];
+        renderBuilderTimeline();
+        
+        // Restore UI Title and Buttons
+        const titleEl = document.getElementById('builderSidebarTitle');
+        const submitBtn = document.getElementById('builderSubmitBtn');
+        const cancelBtn = document.getElementById('builderCancelBtn');
+        
+        if (titleEl) titleEl.innerText = `🛠️ 建立自訂影片範本`;
+        if (submitBtn) submitBtn.innerText = `💾 儲存並發佈範本`;
+        if (cancelBtn) cancelBtn.style.display = 'none';
+    }
+
+    window.cancelBuilderEdit = function() {
+        if (confirm('確定要取消編輯此範本嗎？未儲存的變更將會遺失。')) {
+            cancelBuilderEditState();
+            // Switch back to Maker tab
+            const creatorTab = document.querySelector('.nav-tab[data-tab="maker"]');
+            if (creatorTab) creatorTab.click();
+        }
+    };
+
+    window.editCustomTemplate = async function(templateId) {
+        try {
+            const res = await fetch(`/api/templates/custom/${templateId}`);
+            if (!res.ok) throw new Error('載入自訂範本失敗');
+            const customTpl = await res.json();
+            
+            // Set state
+            editingTemplateId = templateId;
+            
+            // Fill inputs
+            document.getElementById('builderName').value = customTpl.name || '';
+            document.getElementById('builderDesc').value = customTpl.description || '';
+            document.getElementById('builderRatio').value = customTpl.aspect_ratio || '9:16';
+            
+            // Populate scenes (deep copy)
+            customScenes = JSON.parse(JSON.stringify(customTpl.scenes || []));
+            
+            // Update UI styling
+            updateBuilderUIForEditing(customTpl.name);
+            
+            // Render scenes timeline
+            renderBuilderTimeline();
+            
+            // Switch to Builder tab
+            const builderTab = document.querySelector('.nav-tab[data-tab="builder"]');
+            if (builderTab) builderTab.click();
+            
+        } catch (error) {
+            alert(`編輯載入失敗: ${error.message}`);
+        }
+    };
+
+    window.deleteCustomTemplate = async function(templateId) {
+        if (confirm('確定要刪除此自訂範本嗎？此動作無法復原。')) {
+            try {
+                const res = await fetch(`/api/templates/custom/${templateId}`, {
+                    method: 'DELETE'
+                });
+                if (!res.ok) throw new Error('刪除失敗');
+                alert('🎉 自訂範本已成功刪除！');
+                await loadTemplates();
+            } catch (error) {
+                alert(`刪除失敗: ${error.message}`);
+            }
+        }
+    };
+
     window.saveCustomTemplate = async function() {
         const nameInput = document.getElementById('builderName');
         const descInput = document.getElementById('builderDesc');
@@ -913,6 +1025,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         const payload = {
+            id: editingTemplateId,
             name: name,
             description: descInput.value.trim(),
             aspect_ratio: ratioInput.value,
@@ -930,12 +1043,10 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (!res.ok) throw new Error('儲存範本失敗');
             
-            alert('🎉 自訂範本儲存並發佈成功！');
+            alert(editingTemplateId ? '🎉 自訂範本修改並更新成功！' : '🎉 自訂範本儲存並發佈成功！');
             
             // Reset Builder
-            document.getElementById('builderForm').reset();
-            customScenes = [];
-            renderBuilderTimeline();
+            cancelBuilderEditState();
             
             // Reload maker templates grid
             await loadTemplates();

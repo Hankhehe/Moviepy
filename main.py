@@ -763,10 +763,29 @@ async def delete_library_item(category: str, item_id: str):
 
 
 class CustomTemplate(BaseModel):
+    id: str = None
     name: str
     description: str
     aspect_ratio: str  # "16:9" | "9:16"
     scenes: List[Dict[str, Any]]
+
+@app.get("/api/templates/custom/{template_id}")
+async def get_custom_template(template_id: str):
+    db = load_db()
+    custom_tpl = db.get("custom_templates", {}).get(template_id)
+    if not custom_tpl:
+        raise HTTPException(status_code=404, detail="Custom template not found")
+    return custom_tpl
+
+@app.delete("/api/templates/custom/{template_id}")
+async def delete_custom_template(template_id: str):
+    db = load_db()
+    if "custom_templates" in db and template_id in db["custom_templates"]:
+        del db["custom_templates"][template_id]
+        save_db(db)
+        return {"status": "success"}
+    else:
+        raise HTTPException(status_code=404, detail="Custom template not found")
 
 @app.post("/api/templates/custom")
 async def create_custom_template(ct: CustomTemplate):
@@ -774,7 +793,7 @@ async def create_custom_template(ct: CustomTemplate):
     if "custom_templates" not in db:
         db["custom_templates"] = {}
         
-    t_id = f"custom_{uuid.uuid4().hex[:8]}"
+    t_id = ct.id if ct.id else f"custom_{uuid.uuid4().hex[:8]}"
     
     scenes_list = []
     for idx, scene in enumerate(ct.scenes):
@@ -788,13 +807,17 @@ async def create_custom_template(ct: CustomTemplate):
             "texts": scene.get("texts", [])
         })
         
+    existing_created_at = db["custom_templates"].get(t_id, {}).get("created_at")
+    created_at = existing_created_at if existing_created_at else datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
     db["custom_templates"][t_id] = {
         "id": t_id,
         "name": ct.name,
         "description": ct.description,
         "aspect_ratio": ct.aspect_ratio,
         "scenes": scenes_list,
-        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        "created_at": created_at,
+        "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     }
     save_db(db)
     return {"status": "success", "template_id": t_id}

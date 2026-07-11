@@ -108,7 +108,7 @@
                     
                     <!-- Left Sidebar - Template Settings -->
                     <div class="builder-sidebar">
-                        <h2 class="builder-sidebar-title">🛠️ 建立自訂影片範本</h2>
+                        <h2 class="builder-sidebar-title" id="builderSidebarTitle">🛠️ 建立自訂影片範本</h2>
                         <form id="builderForm" onsubmit="event.preventDefault(); saveCustomTemplate();">
                             <div class="form-group">
                                 <label for="builderName">範本名稱 *</label>
@@ -125,8 +125,11 @@
                                     <option value="16:9">16:9 橫式 (YouTube/簡報影片)</option>
                                 </select>
                             </div>
-                            <button type="submit" class="submit-btn" style="background: linear-gradient(135deg, var(--accent-color), var(--neon-blue)); border: none; box-shadow: 0 4px 12px var(--accent-glow);">
+                            <button type="submit" class="submit-btn" id="builderSubmitBtn" style="background: linear-gradient(135deg, var(--accent-color), var(--neon-blue)); border: none; box-shadow: 0 4px 12px var(--accent-glow);">
                                 💾 儲存並發佈範本
+                            </button>
+                            <button type="button" class="submit-btn" id="builderCancelBtn" onclick="cancelBuilderEdit()" style="margin-top: 0.5rem; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); display: none;">
+                                ❌ 取消編輯
                             </button>
                         </form>
                     </div>

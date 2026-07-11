@@ -350,6 +350,12 @@ main {
     height: 100%;
     opacity: 0;
     cursor: pointer;
+    z-index: 1;
+}
+
+.select-library-btn {
+    position: relative;
+    z-index: 10;
 }
 
 /* Selected Files Preview */

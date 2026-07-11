@@ -111,6 +111,22 @@
             "type": "image",
             "url": "/library/photos/default_logo.png",
             "uploaded_at": "2026-07-11 10:56:17"
+        },
+        "7bb70e42-0aea-44ae-8afb-a38a4412ae0a_scene_0_file_c4400d.jpg": {
+            "filename": "7bb70e42-0aea-44ae-8afb-a38a4412ae0a_scene_0_file_c4400d.jpg",
+            "name": "PXL_20260613_021449147.MP.jpg",
+            "memo": "",
+            "type": "image",
+            "url": "/library/photos/7bb70e42-0aea-44ae-8afb-a38a4412ae0a_scene_0_file_c4400d.jpg",
+            "uploaded_at": "2026-07-11 11:24:24"
+        },
+        "7bb70e42-0aea-44ae-8afb-a38a4412ae0a_scene_1_file_42ab21.mp4": {
+            "filename": "7bb70e42-0aea-44ae-8afb-a38a4412ae0a_scene_1_file_42ab21.mp4",
+            "name": "product_sample.mp4",
+            "memo": "",
+            "type": "video",
+            "url": "/library/movies/7bb70e42-0aea-44ae-8afb-a38a4412ae0a_scene_1_file_42ab21.mp4",
+            "uploaded_at": "2026-07-11 11:24:24"
         }
     },
     "videos": {
@@ -129,50 +145,70 @@
             "url": "/outputs/output_929c3be2-5f46-4fd9-a028-322846f51919.mp4",
             "template_id": "custom_de346caa",
             "created_at": "2026-07-11 09:53:11"
+        },
+        "output_7bb70e42-0aea-44ae-8afb-a38a4412ae0a.mp4": {
+            "filename": "output_7bb70e42-0aea-44ae-8afb-a38a4412ae0a.mp4",
+            "name": "未命名影片 - 0711_1124",
+            "memo": "使用「未命名影片」範本於 2026-07-11 11:24:59 製作完成。",
+            "url": "/outputs/output_7bb70e42-0aea-44ae-8afb-a38a4412ae0a.mp4",
+            "template_id": "custom_de346caa",
+            "created_at": "2026-07-11 11:24:59"
         }
     },
     "custom_templates": {
-        "custom_de346caa": {
-            "id": "custom_de346caa",
-            "name": "測試",
-            "description": "sdasadasda",
-            "aspect_ratio": "16:9",
+        "custom_f8553eb8": {
+            "id": "custom_f8553eb8",
+            "name": "已更新的測試自訂分鏡範本",
+            "description": "這是一個用於驗證的測試範本",
+            "aspect_ratio": "9:16",
             "scenes": [
                 {
-                    "duration": 3.0,
+                    "duration": 4.5,
                     "visual_type": "image_zoom",
                     "zoom_direction": "in",
-                    "color": "#000000",
+                    "color": "#ff0000",
                     "asset_field": "scene_0_file",
                     "texts": [
                         {
-                            "content": "我的文字疊加",
-                            "font_size": 40,
+                            "content": "第一幕測試文字",
+                            "position": "center",
                             "color": "#ffffff",
-                            "position": "top",
-                            "start_time": 1,
-                            "end_time": 3
+                            "font_size": 48,
+                            "start_time": 0.5,
+                            "end_time": 4.0
                         }
                     ]
-                },
-                {
-                    "duration": 3.0,
-                    "visual_type": "user_video",
-                    "zoom_direction": "in",
-                    "color": "#000000",
-                    "asset_field": "scene_1_file",
-                    "texts": []
-                },
-                {
-                    "duration": 3.0,
-                    "visual_type": "solid_color",
-                    "zoom_direction": "in",
-                    "color": "#ee4f4f",
-                    "asset_field": "",
-                    "texts": []
                 }
             ],
-            "created_at": "2026-07-11 09:50:39"
+            "created_at": "2026-07-11 19:54:18",
+            "updated_at": "2026-07-11 19:54:18"
+        },
+        "custom_9151238e": {
+            "id": "custom_9151238e",
+            "name": "已更新的測試自訂分鏡範本",
+            "description": "這是一個用於驗證的測試範本",
+            "aspect_ratio": "9:16",
+            "scenes": [
+                {
+                    "duration": 4.5,
+                    "visual_type": "image_zoom",
+                    "zoom_direction": "in",
+                    "color": "#ff0000",
+                    "asset_field": "scene_0_file",
+                    "texts": [
+                        {
+                            "content": "第一幕測試文字",
+                            "position": "center",
+                            "color": "#ffffff",
+                            "font_size": 48,
+                            "start_time": 0.5,
+                            "end_time": 4.0
+                        }
+                    ]
+                }
+            ],
+            "created_at": "2026-07-11 19:57:18",
+            "updated_at": "2026-07-11 19:57:19"
         }
     },
     "system_initialized": true
