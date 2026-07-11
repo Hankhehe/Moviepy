@@ -23,6 +23,32 @@ document.addEventListener('DOMContentLoaded', () => {
     let pollInterval = null;
     let selectedFilesMap = {}; // Tracks selected files for drag & drop zones
 
+    // View Tab Switching
+    const navTabs = document.querySelectorAll('.nav-tab');
+    const makerView = document.getElementById('makerView');
+    const mediaView = document.getElementById('mediaView');
+
+    navTabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            const target = tab.dataset.tab;
+
+            // Remove active class from all tabs, add to clicked one
+            navTabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+
+            // Switch views
+            if (target === 'maker') {
+                makerView.classList.add('active');
+                mediaView.classList.remove('active');
+            } else {
+                makerView.classList.remove('active');
+                mediaView.classList.add('active');
+                // Refresh library when opening media center
+                loadLibrary();
+            }
+        });
+    });
+
     // 1. Fetch available templates
     async function loadTemplates() {
         try {
