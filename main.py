@@ -26,14 +26,15 @@ from datetime import datetime
 
 # Directories
 WORKSPACE_DIR = os.path.dirname(os.path.abspath(__file__))
-UPLOAD_DIR = os.path.join(WORKSPACE_DIR, "uploads")
 OUTPUT_DIR = os.path.join(WORKSPACE_DIR, "outputs")
 STATIC_DIR = os.path.join(WORKSPACE_DIR, "static")
 TEMPLATES_DIR = os.path.join(STATIC_DIR, "templates")
-ASSETS_DIR = os.path.join(STATIC_DIR, "assets")
 LIBRARY_DIR = os.path.join(STATIC_DIR, "library")
+LIBRARY_MOVIES_DIR = os.path.join(LIBRARY_DIR, "movies")
+LIBRARY_PHOTOS_DIR = os.path.join(LIBRARY_DIR, "photos")
+LIBRARY_MUSIC_DIR = os.path.join(LIBRARY_DIR, "music")
 
-for directory in [UPLOAD_DIR, OUTPUT_DIR, STATIC_DIR, TEMPLATES_DIR, ASSETS_DIR, LIBRARY_DIR]:
+for directory in [OUTPUT_DIR, STATIC_DIR, TEMPLATES_DIR, LIBRARY_DIR, LIBRARY_MOVIES_DIR, LIBRARY_PHOTOS_DIR, LIBRARY_MUSIC_DIR]:
     os.makedirs(directory, exist_ok=True)
 
 # Mount static files
@@ -71,6 +72,99 @@ def get_file_type(filename: str) -> str:
     else:
         return "image"
 
+def get_library_file_path(filename: str) -> str:
+    db = load_db()
+    info = db.get("assets", {}).get(filename, {})
+    file_type = info.get("type", get_file_type(filename))
+    if file_type == "audio":
+        return os.path.join(LIBRARY_MUSIC_DIR, filename)
+    elif file_type == "video":
+        return os.path.join(LIBRARY_MOVIES_DIR, filename)
+    else:
+        return os.path.join(LIBRARY_PHOTOS_DIR, filename)
+
+def migrate_existing_library_files(first_run: bool = True):
+    db = load_db()
+    db_changed = False
+    
+    # 1. Migrate existing files inside LIBRARY_DIR root to subfolders
+    for filename in list(db.get("assets", {}).keys()):
+        asset_info = db["assets"][filename]
+        file_type = asset_info.get("type", get_file_type(filename))
+        
+        old_path = os.path.join(LIBRARY_DIR, filename)
+        
+        if file_type == "image":
+            new_path = os.path.join(LIBRARY_PHOTOS_DIR, filename)
+            url_prefix = "/library/photos"
+        elif file_type == "video":
+            new_path = os.path.join(LIBRARY_MOVIES_DIR, filename)
+            url_prefix = "/library/movies"
+        else: # audio
+            new_path = os.path.join(LIBRARY_MUSIC_DIR, filename)
+            url_prefix = "/library/music"
+            
+        if os.path.exists(old_path) and not os.path.exists(new_path):
+            try:
+                shutil.move(old_path, new_path)
+                print(f"Migrated library file: {filename} -> {new_path}")
+            except Exception as e:
+                print(f"Failed to move file {filename}: {e}")
+                
+        old_url = f"/library/{filename}"
+        new_url = f"{url_prefix}/{filename}"
+        if asset_info.get("url") == old_url:
+            asset_info["url"] = new_url
+            db_changed = True
+            
+    if first_run:
+        # 2. Scan LIBRARY_MUSIC_DIR and register unregistered files in DB
+        if os.path.exists(LIBRARY_MUSIC_DIR):
+            for f in os.listdir(LIBRARY_MUSIC_DIR):
+                if f.endswith(".mp3") or f.endswith(".wav"):
+                    if f not in db.get("assets", {}):
+                        name_without_ext = os.path.splitext(f)[0]
+                        label = name_without_ext.replace("_", " ").title()
+                        custom_labels = {
+                            "upbeat_electro": "輕快動感電音",
+                            "chill_vibes": "放鬆律動音樂",
+                            "acoustic_peace": "溫馨和平吉他",
+                            "ambient": "靈動氛圍音樂",
+                            "tech": "科技感電子樂",
+                            "cinematic": "磅礡電影音效",
+                            "default_audio": "預設簡短提示音"
+                        }
+                        display_label = custom_labels.get(name_without_ext, label)
+                        
+                        db["assets"][f] = {
+                            "filename": f,
+                            "name": display_label,
+                            "memo": "系統內建配樂素材",
+                            "type": "audio",
+                            "url": f"/library/music/{f}",
+                            "uploaded_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        }
+                        db_changed = True
+                        print(f"Registered track in DB: {f}")
+                        
+        # 3. Register default logo in DB if it exists
+        default_logo_filename = "default_logo.png"
+        if os.path.exists(os.path.join(LIBRARY_PHOTOS_DIR, default_logo_filename)):
+            if default_logo_filename not in db.get("assets", {}):
+                db["assets"][default_logo_filename] = {
+                    "filename": default_logo_filename,
+                    "name": "系統預設 Logo 圖片",
+                    "memo": "系統預設示範標誌圖片",
+                    "type": "image",
+                    "url": f"/library/photos/{default_logo_filename}",
+                    "uploaded_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                }
+                db_changed = True
+                print("Registered default logo in DB.")
+            
+    if db_changed:
+        save_db(db)
+
 def update_task_progress(task_id: str, progress: int, message: str, status: str = "processing"):
     if task_id in tasks_status:
         tasks_status[task_id]["progress"] = progress
@@ -100,48 +194,66 @@ def download_audio_asset(url: str, dest_path: str):
 # Startup events
 @app.on_event("startup")
 async def startup_event():
+    db = load_db()
+    first_run = not db.get("system_initialized", False)
+    
     # Pre-generate preview videos programmatically on start
     print("Initializing system assets and default preview videos...")
     
-    # 1. Asynchronously download royalty-free background music tracks
-    urls = {
-        "upbeat_electro.mp3": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
-        "chill_vibes.mp3": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
-        "acoustic_peace.mp3": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3"
-    }
-    
-    loop = asyncio.get_event_loop()
-    for filename, url in urls.items():
-        dest = os.path.join(ASSETS_DIR, filename)
-        if not os.path.exists(dest):
-            loop.run_in_executor(None, download_audio_asset, url, dest)
+    # 1. Asynchronously download royalty-free background music tracks to LIBRARY_MUSIC_DIR
+    if first_run:
+        urls = {
+            "upbeat_electro.mp3": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+            "chill_vibes.mp3": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
+            "acoustic_peace.mp3": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3"
+        }
+        
+        loop = asyncio.get_event_loop()
+        for filename, url in urls.items():
+            dest = os.path.join(LIBRARY_MUSIC_DIR, filename)
+            if not os.path.exists(dest):
+                loop.run_in_executor(None, download_audio_asset, url, dest)
             
-    # 2. Generate ambient/tech/cinematic synth files for user selections
-    music_tracks = {
-        "ambient.mp3": lambda t: np.sin(2 * np.pi * 220 * t) * 0.4 + np.sin(2 * np.pi * 275 * t) * 0.3,
-        "tech.mp3": lambda t: np.sin(2 * np.pi * 440 * (t % 0.25 < 0.1) * t) * 0.3 + np.sin(2 * np.pi * 880 * (t % 0.25 < 0.05) * t) * 0.2,
-        "cinematic.mp3": lambda t: np.sin(2 * np.pi * 110 * t) * 0.5 * (1 - np.exp(-t)) + np.sin(2 * np.pi * 165 * t) * 0.4
-    }
-    
-    import numpy as np
-    from moviepy.audio.AudioClip import AudioClip
-    
-    for filename, wave_func in music_tracks.items():
-        path = os.path.join(ASSETS_DIR, filename)
-        if not os.path.exists(path):
-            try:
-                print(f"Generating audio asset: {filename}...")
-                tone = AudioClip(wave_func, duration=30.0, fps=44100)
-                tone.write_audiofile(path, fps=44100, logger=None)
-                tone.close()
-            except Exception as e:
-                print(f"Failed to generate synth {filename}: {e}")
+    # 2. Generate ambient/tech/cinematic synth files for user selections inside LIBRARY_MUSIC_DIR
+    if first_run:
+        music_tracks = {
+            "ambient.mp3": lambda t: np.sin(2 * np.pi * 220 * t) * 0.4 + np.sin(2 * np.pi * 275 * t) * 0.3,
+            "tech.mp3": lambda t: np.sin(2 * np.pi * 440 * (t % 0.25 < 0.1) * t) * 0.3 + np.sin(2 * np.pi * 880 * (t % 0.25 < 0.05) * t) * 0.2,
+            "cinematic.mp3": lambda t: np.sin(2 * np.pi * 110 * t) * 0.5 * (1 - np.exp(-t)) + np.sin(2 * np.pi * 165 * t) * 0.4
+        }
+        
+        import numpy as np
+        from moviepy.audio.AudioClip import AudioClip
+        
+        for filename, wave_func in music_tracks.items():
+            path = os.path.join(LIBRARY_MUSIC_DIR, filename)
+            if not os.path.exists(path):
+                try:
+                    print(f"Generating audio asset: {filename}...")
+                    tone = AudioClip(wave_func, duration=30.0, fps=44100)
+                    tone.write_audiofile(path, fps=44100, logger=None)
+                    tone.close()
+                except Exception as e:
+                    print(f"Failed to generate synth {filename}: {e}")
                 
-    # 3. Initialize templates
+    # 3. Initialize templates preview videos
     try:
-        video_processor.generate_default_previews(TEMPLATES_DIR, ASSETS_DIR)
+        video_processor.generate_default_previews(TEMPLATES_DIR, LIBRARY_PHOTOS_DIR, LIBRARY_MUSIC_DIR)
     except Exception as e:
         print(f"Error generating preview templates: {e}")
+
+    # 4. Run library directory migration, file classification, and database registration
+    print("Running library migration and database registration...")
+    try:
+        migrate_existing_library_files(first_run=first_run)
+    except Exception as e:
+        print(f"Error during library database synchronization: {e}")
+
+    # Mark system as initialized
+    if first_run:
+        db = load_db()
+        db["system_initialized"] = True
+        save_db(db)
 
 @app.get("/")
 async def read_root():
@@ -149,30 +261,12 @@ async def read_root():
 
 @app.get("/api/templates")
 async def get_templates():
-    # Dynamically scan static/assets for mp3 files
-    mp3_options = []
-    if os.path.exists(ASSETS_DIR):
-        for f in os.listdir(ASSETS_DIR):
-            if f.endswith(".mp3"):
-                name_without_ext = os.path.splitext(f)[0]
-                label = name_without_ext.replace("_", " ").title()
-                
-                custom_labels = {
-                    "upbeat_electro": "輕快動感電音 (推薦)",
-                    "chill_vibes": "放鬆律動音樂 (推薦)",
-                    "acoustic_peace": "溫馨和平吉他 (推薦)",
-                    "ambient": "靈動氛圍音樂 (內建合成)",
-                    "tech": "科技感電子樂 (內建合成)",
-                    "cinematic": "磅礡電影音效 (內建合成)",
-                    "default_audio": "預設簡短提示音 (內建合成)"
-                }
-                
-                display_label = custom_labels.get(name_without_ext, label)
-                mp3_options.append({"value": f, "label": display_label})
-                
+    db = load_db()
+    library_audios = []
+    
     # Sort options to put recommended ones first, then others
-    def sort_key(opt):
-        val = opt["value"]
+    def sort_key(item):
+        val = item.get("filename", "")
         if "upbeat" in val or "chill" in val or "acoustic" in val:
             return (0, val)
         elif "default_audio" in val:
@@ -180,11 +274,19 @@ async def get_templates():
         else:
             return (1, val)
             
-    mp3_options.sort(key=sort_key)
+    # Filter for audio types and sort them
+    audio_items = [item for item in db.get("assets", {}).values() if item.get("type") == "audio"]
+    audio_items.sort(key=sort_key)
     
-    # Add standard custom file upload option at the end
-    music_options = list(mp3_options) + [{"value": "custom", "label": "自行上傳音訊檔案 (.mp3/.wav)"}]
-    sound_options = list(mp3_options) + [{"value": "custom", "label": "自行上傳音效檔案 (.mp3/.wav)"}]
+    for info in audio_items:
+        library_audios.append({
+            "value": f"library:{info.get('filename')}",
+            "label": f"🎵 {info.get('name')}"
+        })
+        
+    # Combine library options and the custom upload option
+    music_options = library_audios + [{"value": "custom", "label": "自行上傳音訊檔案 (.mp3/.wav)"}]
+    sound_options = library_audios + [{"value": "custom", "label": "自行上傳音效檔案 (.mp3/.wav)"}]
     
     templates = [
         {
@@ -240,7 +342,71 @@ async def get_templates():
             ]
         }
     ]
+    
+    # Load custom templates from database dynamically
+    db = load_db()
+    custom_templates = db.get("custom_templates", {})
+    for t_id, ct in custom_templates.items():
+        fields = []
+        for idx, scene in enumerate(ct.get("scenes", [])):
+            visual_type = scene.get("visual_type", "image_zoom")
+            field_name = scene.get("asset_field", f"scene_{idx}_file")
+            
+            if visual_type == "image_zoom":
+                label = f"場景 {idx+1} 圖片素材 (圖片)"
+                accept = "image/*"
+            elif visual_type == "user_video":
+                label = f"場景 {idx+1} 影片素材 (短片)"
+                accept = "video/*"
+            else:
+                # Solid color does not require file upload
+                continue
+                
+            fields.append({
+                "name": field_name,
+                "label": label,
+                "type": "file",
+                "multiple": False,
+                "accept": accept,
+                "required": True
+            })
+            
+        # Add background music options
+        fields.append({
+            "name": "music",
+            "label": "選擇背景音樂",
+            "type": "select",
+            "options": music_options,
+            "required": True
+        })
+        fields.append({
+            "name": "custom_audio",
+            "label": "上傳自訂音樂檔案",
+            "type": "file",
+            "multiple": False,
+            "accept": "audio/*",
+            "required": False,
+            "conditional": "music=custom"
+        })
+        
+        templates.append({
+            "id": t_id,
+            "name": f"✨ [自訂] {ct.get('name')}",
+            "description": f"{ct.get('description', '')} (比例: {ct.get('aspect_ratio', '9:16')}, 共 {len(ct.get('scenes', []))} 個場景)",
+            "preview_url": "/static/templates/promo_preview.mp4",
+            "fields": fields
+        })
+        
     return templates
+
+def get_audio_path(selection: str, custom_file_path: str = None) -> str:
+    if selection == "custom":
+        return custom_file_path
+    elif selection.startswith("library:"):
+        filename = selection.split("library:")[1]
+        return get_library_file_path(filename)
+    else:
+        return os.path.join(LIBRARY_MUSIC_DIR, selection)
 
 def run_render_in_thread(task_id: str, template_id: str, params: Dict[str, Any], file_paths: Dict[str, Any]):
     """Background rendering coordinator running in a separate thread/process context."""
@@ -251,12 +417,9 @@ def run_render_in_thread(task_id: str, template_id: str, params: Dict[str, Any],
         if template_id == "slideshow":
             images = file_paths.get("images", [])
             title = params.get("title", "")
-            music_selection = params.get("music", "ambient.mp3")
+            music_selection = params.get("music", "library:ambient.mp3")
             
-            if music_selection == "custom":
-                bg_music = file_paths.get("custom_audio", None)
-            else:
-                bg_music = os.path.join(ASSETS_DIR, music_selection)
+            bg_music = get_audio_path(music_selection, file_paths.get("custom_audio", None))
                 
             video_processor.generate_slideshow_video(
                 task_id, images, title, bg_music, output_path, update_task_progress
@@ -275,12 +438,9 @@ def run_render_in_thread(task_id: str, template_id: str, params: Dict[str, Any],
             logo = file_paths.get("logo", "")
             brand_name = params.get("brand_name", "")
             tagline = params.get("tagline", "")
-            sound_selection = params.get("sound", "cinematic.mp3")
+            sound_selection = params.get("sound", "library:cinematic.mp3")
             
-            if sound_selection == "custom":
-                bg_music = file_paths.get("custom_audio", None)
-            else:
-                bg_music = os.path.join(ASSETS_DIR, sound_selection)
+            bg_music = get_audio_path(sound_selection, file_paths.get("custom_audio", None))
                 
             video_processor.generate_logo_intro_video(
                 task_id, logo, brand_name, tagline, bg_music, output_path, update_task_progress
@@ -295,31 +455,30 @@ def run_render_in_thread(task_id: str, template_id: str, params: Dict[str, Any],
                 params.get("highlight2", ""),
                 params.get("highlight3", "")
             ]
-            music_selection = params.get("music", "tech.mp3")
+            music_selection = params.get("music", "library:tech.mp3")
             
-            if music_selection == "custom":
-                bg_music = file_paths.get("custom_audio", None)
-            else:
-                bg_music = os.path.join(ASSETS_DIR, music_selection)
+            bg_music = get_audio_path(music_selection, file_paths.get("custom_audio", None))
                 
             video_processor.generate_product_promo_video(
                 task_id, images, brand_name, product_name, highlights, bg_music, output_path, update_task_progress
             )
             
+        elif template_id.startswith("custom_"):
+            db = load_db()
+            custom_tpl = db.get("custom_templates", {}).get(template_id)
+            if not custom_tpl:
+                raise ValueError(f"Custom template {template_id} not found.")
+                
+            music_selection = params.get("music", "library:ambient.mp3")
+            bg_music = get_audio_path(music_selection, file_paths.get("custom_audio", None))
+                
+            video_processor.generate_custom_template_video(
+                task_id, custom_tpl, file_paths, bg_music, output_path, update_task_progress
+            )
+            
         else:
             raise ValueError(f"Unknown template ID: {template_id}")
             
-        # Clean up temporary uploaded files (only those in uploads, not library)
-        for key, val in file_paths.items():
-            if isinstance(val, list):
-                for path in val:
-                    if os.path.exists(path) and UPLOAD_DIR in path:
-                        try: os.remove(path)
-                        except Exception: pass
-            elif isinstance(val, str) and val and os.path.exists(val) and UPLOAD_DIR in val:
-                try: os.remove(val)
-                except Exception: pass
-                
         # Mark task as completed
         tasks_status[task_id]["status"] = "completed"
         tasks_status[task_id]["progress"] = 100
@@ -382,10 +541,24 @@ async def start_render(
     file_paths = {}
     
     try:
+        # Resolve library file selections first (*_library parameters)
+        for key in list(form_data.keys()):
+            if key.endswith("_library"):
+                orig_key = key[:-8]  # Strip "_library"
+                val_str = form_data.get(key)
+                if val_str:
+                    filenames = [f.strip() for f in val_str.split(",") if f.strip()]
+                    resolved_paths = [get_library_file_path(f) for f in filenames]
+                    
+                    if orig_key == "images":
+                        file_paths[orig_key] = resolved_paths
+                    else:
+                        file_paths[orig_key] = resolved_paths[0] if resolved_paths else ""
+
         # Extract fields and save files correctly (avoiding reading streams twice)
         keys_processed = set()
         for key in form_data.keys():
-            if key == "template_id" or key in keys_processed:
+            if key == "template_id" or key in keys_processed or key.endswith("_library"):
                 continue
             
             keys_processed.add(key)
@@ -395,7 +568,7 @@ async def start_render(
                 
             # Check if this key holds file upload(s)
             if hasattr(values[0], "filename"):
-                # Save uploaded files persistently into LIBRARY_DIR
+                # Save uploaded files persistently into LIBRARY_DIR subfolders
                 if len(values) > 1 or key == "images":
                     saved_paths = []
                     db = load_db()
@@ -403,7 +576,18 @@ async def start_render(
                         if upload_file.filename:
                             ext = os.path.splitext(upload_file.filename)[1]
                             temp_filename = f"{task_id}_{key}_{idx}_{uuid.uuid4().hex[:6]}{ext}"
-                            temp_path = os.path.join(LIBRARY_DIR, temp_filename)
+                            
+                            f_type = get_file_type(temp_filename)
+                            if f_type == "image":
+                                temp_path = os.path.join(LIBRARY_PHOTOS_DIR, temp_filename)
+                                url_path = f"/library/photos/{temp_filename}"
+                            elif f_type == "video":
+                                temp_path = os.path.join(LIBRARY_MOVIES_DIR, temp_filename)
+                                url_path = f"/library/movies/{temp_filename}"
+                            else: # audio
+                                temp_path = os.path.join(LIBRARY_MUSIC_DIR, temp_filename)
+                                url_path = f"/library/music/{temp_filename}"
+                                
                             with open(temp_path, "wb") as buffer:
                                 shutil.copyfileobj(upload_file.file, buffer)
                             saved_paths.append(temp_path)
@@ -412,18 +596,30 @@ async def start_render(
                                 "filename": temp_filename,
                                 "name": upload_file.filename,
                                 "memo": "",
-                                "type": get_file_type(temp_filename),
-                                "url": f"/library/{temp_filename}",
+                                "type": f_type,
+                                "url": url_path,
                                 "uploaded_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                             }
                     save_db(db)
-                    file_paths[key] = saved_paths
+                    if saved_paths:
+                        file_paths[key] = saved_paths
                 else:
                     upload_file = values[0]
                     if upload_file.filename:
                         ext = os.path.splitext(upload_file.filename)[1]
                         temp_filename = f"{task_id}_{key}_{uuid.uuid4().hex[:6]}{ext}"
-                        temp_path = os.path.join(LIBRARY_DIR, temp_filename)
+                        
+                        f_type = get_file_type(temp_filename)
+                        if f_type == "image":
+                            temp_path = os.path.join(LIBRARY_PHOTOS_DIR, temp_filename)
+                            url_path = f"/library/photos/{temp_filename}"
+                        elif f_type == "video":
+                            temp_path = os.path.join(LIBRARY_MOVIES_DIR, temp_filename)
+                            url_path = f"/library/movies/{temp_filename}"
+                        else: # audio
+                            temp_path = os.path.join(LIBRARY_MUSIC_DIR, temp_filename)
+                            url_path = f"/library/music/{temp_filename}"
+                            
                         with open(temp_path, "wb") as buffer:
                             shutil.copyfileobj(upload_file.file, buffer)
                         file_paths[key] = temp_path
@@ -433,8 +629,8 @@ async def start_render(
                             "filename": temp_filename,
                             "name": upload_file.filename,
                             "memo": "",
-                            "type": get_file_type(temp_filename),
-                            "url": f"/library/{temp_filename}",
+                            "type": f_type,
+                            "url": url_path,
                             "uploaded_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         }
                         save_db(db)
@@ -469,6 +665,47 @@ class UpdateItem(BaseModel):
     id: str        # filename
     name: str
     memo: str
+
+@app.post("/api/library/upload")
+async def upload_library_file(file: UploadFile = File(...)):
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No filename provided")
+        
+    ext = os.path.splitext(file.filename)[1]
+    task_id = str(uuid.uuid4())
+    temp_filename = f"uploaded_{task_id[:8]}_{uuid.uuid4().hex[:6]}{ext}"
+    
+    file_type = get_file_type(temp_filename)
+    if file_type == "image":
+        temp_path = os.path.join(LIBRARY_PHOTOS_DIR, temp_filename)
+        url_path = f"/library/photos/{temp_filename}"
+    elif file_type == "video":
+        temp_path = os.path.join(LIBRARY_MOVIES_DIR, temp_filename)
+        url_path = f"/library/movies/{temp_filename}"
+    else: # audio
+        temp_path = os.path.join(LIBRARY_MUSIC_DIR, temp_filename)
+        url_path = f"/library/music/{temp_filename}"
+        
+    try:
+        with open(temp_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+            
+        db = load_db()
+        db["assets"][temp_filename] = {
+            "filename": temp_filename,
+            "name": file.filename,
+            "memo": "手動上傳的素材",
+            "type": file_type,
+            "url": url_path,
+            "uploaded_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        save_db(db)
+        return {"status": "success", "filename": temp_filename}
+    except Exception as e:
+        if os.path.exists(temp_path):
+            try: os.remove(temp_path)
+            except Exception: pass
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/library")
 async def get_library():
@@ -510,7 +747,7 @@ async def delete_library_item(category: str, item_id: str):
         
     filename = db[category][item_id]["filename"]
     if category == "assets":
-        file_path = os.path.join(LIBRARY_DIR, filename)
+        file_path = get_library_file_path(filename)
     else:
         file_path = os.path.join(OUTPUT_DIR, filename)
         
@@ -523,6 +760,44 @@ async def delete_library_item(category: str, item_id: str):
     del db[category][item_id]
     save_db(db)
     return {"status": "success"}
+
+
+class CustomTemplate(BaseModel):
+    name: str
+    description: str
+    aspect_ratio: str  # "16:9" | "9:16"
+    scenes: List[Dict[str, Any]]
+
+@app.post("/api/templates/custom")
+async def create_custom_template(ct: CustomTemplate):
+    db = load_db()
+    if "custom_templates" not in db:
+        db["custom_templates"] = {}
+        
+    t_id = f"custom_{uuid.uuid4().hex[:8]}"
+    
+    scenes_list = []
+    for idx, scene in enumerate(ct.scenes):
+        visual_type = scene.get("visual_type", "image_zoom")
+        scenes_list.append({
+            "duration": float(scene.get("duration", 3.0)),
+            "visual_type": visual_type,
+            "zoom_direction": scene.get("zoom_direction", "in"),
+            "color": scene.get("color", "#000000"),
+            "asset_field": f"scene_{idx}_file" if visual_type != "solid_color" else "",
+            "texts": scene.get("texts", [])
+        })
+        
+    db["custom_templates"][t_id] = {
+        "id": t_id,
+        "name": ct.name,
+        "description": ct.description,
+        "aspect_ratio": ct.aspect_ratio,
+        "scenes": scenes_list,
+        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }
+    save_db(db)
+    return {"status": "success", "template_id": t_id}
 
 
 if __name__ == "__main__":

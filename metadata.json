@@ -5,7 +5,7 @@
             "name": "PXL_20260620_103749270.MP.jpg",
             "memo": "",
             "type": "image",
-            "url": "/library/9ebf1c9c-42e0-4d0b-9034-ba11311f0422_images_0_07c0f5.jpg",
+            "url": "/library/photos/9ebf1c9c-42e0-4d0b-9034-ba11311f0422_images_0_07c0f5.jpg",
             "uploaded_at": "2026-07-11 00:50:12"
         },
         "9ebf1c9c-42e0-4d0b-9034-ba11311f0422_images_1_daa87f.jpg": {
@@ -13,15 +13,7 @@
             "name": "PXL_20260613_024114133.jpg",
             "memo": "",
             "type": "image",
-            "url": "/library/9ebf1c9c-42e0-4d0b-9034-ba11311f0422_images_1_daa87f.jpg",
-            "uploaded_at": "2026-07-11 00:50:12"
-        },
-        "9ebf1c9c-42e0-4d0b-9034-ba11311f0422_images_2_4a58e0.jpg": {
-            "filename": "9ebf1c9c-42e0-4d0b-9034-ba11311f0422_images_2_4a58e0.jpg",
-            "name": "PXL_20260613_022648500.PORTRAIT.ORIGINAL.jpg",
-            "memo": "",
-            "type": "image",
-            "url": "/library/9ebf1c9c-42e0-4d0b-9034-ba11311f0422_images_2_4a58e0.jpg",
+            "url": "/library/photos/9ebf1c9c-42e0-4d0b-9034-ba11311f0422_images_1_daa87f.jpg",
             "uploaded_at": "2026-07-11 00:50:12"
         },
         "9ebf1c9c-42e0-4d0b-9034-ba11311f0422_images_3_d8bea9.jpg": {
@@ -29,8 +21,96 @@
             "name": "PXL_20260613_021449147.MP.jpg",
             "memo": "",
             "type": "image",
-            "url": "/library/9ebf1c9c-42e0-4d0b-9034-ba11311f0422_images_3_d8bea9.jpg",
+            "url": "/library/photos/9ebf1c9c-42e0-4d0b-9034-ba11311f0422_images_3_d8bea9.jpg",
             "uploaded_at": "2026-07-11 00:50:12"
+        },
+        "8234bdfa-3f62-4829-b970-bb41714c9a5b_scene_0_file_0f2596.jpg": {
+            "filename": "8234bdfa-3f62-4829-b970-bb41714c9a5b_scene_0_file_0f2596.jpg",
+            "name": "PXL_20260620_103749270.MP.jpg",
+            "memo": "",
+            "type": "image",
+            "url": "/library/photos/8234bdfa-3f62-4829-b970-bb41714c9a5b_scene_0_file_0f2596.jpg",
+            "uploaded_at": "2026-07-11 09:51:04"
+        },
+        "8234bdfa-3f62-4829-b970-bb41714c9a5b_scene_1_file_dfc2c9.mp4": {
+            "filename": "8234bdfa-3f62-4829-b970-bb41714c9a5b_scene_1_file_dfc2c9.mp4",
+            "name": "product_sample.mp4",
+            "memo": "",
+            "type": "video",
+            "url": "/library/movies/8234bdfa-3f62-4829-b970-bb41714c9a5b_scene_1_file_dfc2c9.mp4",
+            "uploaded_at": "2026-07-11 09:51:04"
+        },
+        "929c3be2-5f46-4fd9-a028-322846f51919_scene_0_file_7929c4.jpg": {
+            "filename": "929c3be2-5f46-4fd9-a028-322846f51919_scene_0_file_7929c4.jpg",
+            "name": "PXL_20260613_024114133.jpg",
+            "memo": "",
+            "type": "image",
+            "url": "/library/photos/929c3be2-5f46-4fd9-a028-322846f51919_scene_0_file_7929c4.jpg",
+            "uploaded_at": "2026-07-11 09:52:34"
+        },
+        "Clear_Horizon.mp3": {
+            "filename": "Clear_Horizon.mp3",
+            "name": "Clear Horizon",
+            "memo": "系統內建配樂素材",
+            "type": "audio",
+            "url": "/library/music/Clear_Horizon.mp3",
+            "uploaded_at": "2026-07-11 10:37:33"
+        },
+        "Measured_Light.mp3": {
+            "filename": "Measured_Light.mp3",
+            "name": "Measured Light",
+            "memo": "系統內建配樂素材",
+            "type": "audio",
+            "url": "/library/music/Measured_Light.mp3",
+            "uploaded_at": "2026-07-11 10:37:33"
+        },
+        "Sugar_Rush_Picnic.mp3": {
+            "filename": "Sugar_Rush_Picnic.mp3",
+            "name": "Sugar Rush Picnic",
+            "memo": "系統內建配樂素材",
+            "type": "audio",
+            "url": "/library/music/Sugar_Rush_Picnic.mp3",
+            "uploaded_at": "2026-07-11 10:37:33"
+        },
+        "Sunday_In_The_Orchard.mp3": {
+            "filename": "Sunday_In_The_Orchard.mp3",
+            "name": "Sunday In The Orchard",
+            "memo": "系統內建配樂素材",
+            "type": "audio",
+            "url": "/library/music/Sunday_In_The_Orchard.mp3",
+            "uploaded_at": "2026-07-11 10:37:33"
+        },
+        "The_Parlor_Heist.mp3": {
+            "filename": "The_Parlor_Heist.mp3",
+            "name": "The Parlor Heist",
+            "memo": "系統內建配樂素材",
+            "type": "audio",
+            "url": "/library/music/The_Parlor_Heist.mp3",
+            "uploaded_at": "2026-07-11 10:37:33"
+        },
+        "upbeat_electro.mp3": {
+            "filename": "upbeat_electro.mp3",
+            "name": "輕快動感電音",
+            "memo": "系統內建配樂素材",
+            "type": "audio",
+            "url": "/library/music/upbeat_electro.mp3",
+            "uploaded_at": "2026-07-11 10:37:33"
+        },
+        "Velocity_Unlocked.mp3": {
+            "filename": "Velocity_Unlocked.mp3",
+            "name": "Velocity Unlocked",
+            "memo": "系統內建配樂素材",
+            "type": "audio",
+            "url": "/library/music/Velocity_Unlocked.mp3",
+            "uploaded_at": "2026-07-11 10:37:33"
+        },
+        "default_logo.png": {
+            "filename": "default_logo.png",
+            "name": "系統預設 Logo 圖片",
+            "memo": "系統預設示範標誌圖片",
+            "type": "image",
+            "url": "/library/photos/default_logo.png",
+            "uploaded_at": "2026-07-11 10:56:17"
         }
     },
     "videos": {
@@ -41,6 +121,59 @@
             "url": "/outputs/output_9ebf1c9c-42e0-4d0b-9034-ba11311f0422.mp4",
             "template_id": "product_promo",
             "created_at": "2026-07-11 00:51:18"
+        },
+        "output_929c3be2-5f46-4fd9-a028-322846f51919.mp4": {
+            "filename": "output_929c3be2-5f46-4fd9-a028-322846f51919.mp4",
+            "name": "未命名影片 - 0711_0953",
+            "memo": "使用「未命名影片」範本於 2026-07-11 09:53:11 製作完成。",
+            "url": "/outputs/output_929c3be2-5f46-4fd9-a028-322846f51919.mp4",
+            "template_id": "custom_de346caa",
+            "created_at": "2026-07-11 09:53:11"
         }
-    }
+    },
+    "custom_templates": {
+        "custom_de346caa": {
+            "id": "custom_de346caa",
+            "name": "測試",
+            "description": "sdasadasda",
+            "aspect_ratio": "16:9",
+            "scenes": [
+                {
+                    "duration": 3.0,
+                    "visual_type": "image_zoom",
+                    "zoom_direction": "in",
+                    "color": "#000000",
+                    "asset_field": "scene_0_file",
+                    "texts": [
+                        {
+                            "content": "我的文字疊加",
+                            "font_size": 40,
+                            "color": "#ffffff",
+                            "position": "top",
+                            "start_time": 1,
+                            "end_time": 3
+                        }
+                    ]
+                },
+                {
+                    "duration": 3.0,
+                    "visual_type": "user_video",
+                    "zoom_direction": "in",
+                    "color": "#000000",
+                    "asset_field": "scene_1_file",
+                    "texts": []
+                },
+                {
+                    "duration": 3.0,
+                    "visual_type": "solid_color",
+                    "zoom_direction": "in",
+                    "color": "#ee4f4f",
+                    "asset_field": "",
+                    "texts": []
+                }
+            ],
+            "created_at": "2026-07-11 09:50:39"
+        }
+    },
+    "system_initialized": true
 }

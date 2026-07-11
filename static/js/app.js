@@ -22,10 +22,13 @@ document.addEventListener('DOMContentLoaded', () => {
     let selectedTemplate = null;
     let pollInterval = null;
     let selectedFilesMap = {}; // Tracks selected files for drag & drop zones
+    let templateFieldsMap = {}; // Tracks field objects for validation and selections
+    let customScenes = [];
 
     // View Tab Switching
     const navTabs = document.querySelectorAll('.nav-tab');
     const makerView = document.getElementById('makerView');
+    const builderView = document.getElementById('builderView');
     const mediaView = document.getElementById('mediaView');
 
     navTabs.forEach(tab => {
@@ -37,11 +40,15 @@ document.addEventListener('DOMContentLoaded', () => {
             tab.classList.add('active');
 
             // Switch views
+            makerView.classList.remove('active');
+            builderView.classList.remove('active');
+            mediaView.classList.remove('active');
+
             if (target === 'maker') {
                 makerView.classList.add('active');
-                mediaView.classList.remove('active');
-            } else {
-                makerView.classList.remove('active');
+            } else if (target === 'builder') {
+                builderView.classList.add('active');
+            } else if (target === 'media') {
                 mediaView.classList.add('active');
                 // Refresh library when opening media center
                 loadLibrary();
@@ -108,8 +115,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // Build form fields
         dynamicFields.innerHTML = '';
         selectedFilesMap = {};
+        templateFieldsMap = {};
 
         selectedTemplate.fields.forEach(field => {
+            templateFieldsMap[field.name] = field;
             const formGroup = document.createElement('div');
             formGroup.className = 'form-group';
             formGroup.id = `group_${field.name}`;
@@ -150,10 +159,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 const dropzone = document.createElement('div');
                 dropzone.className = 'dropzone';
                 dropzone.id = `dropzone_${field.name}`;
+                
+                // Add select from library button
+                let libraryBtnHtml = '';
+                if (field.accept.includes('image') || field.accept.includes('video') || field.accept.includes('audio')) {
+                    libraryBtnHtml = `<button type="button" class="select-library-btn" style="margin-top: 0.5rem; background: var(--gradient-accent); border: none; color: white; padding: 0.35rem 0.8rem; border-radius: 8px; font-size: 0.8rem; cursor: pointer; transition: transform 0.2s;" onclick="openLibrarySelect('${field.name}', ${field.multiple || false}, '${field.accept}')">📂 從媒體庫選擇</button>`;
+                }
+
                 dropzone.innerHTML = `
                     <div class="dropzone-icon">↑</div>
                     <p>將檔案拖曳至此，或點擊上傳</p>
                     <span>支援格式: ${field.accept === 'image/*' ? '圖片 (PNG/JPG)' : field.accept === 'video/*' ? '影片 (MP4)' : '音訊 (MP3/WAV)'}</span>
+                    ${libraryBtnHtml}
+                    <input type="hidden" name="${field.name}_library" id="library_input_${field.name}">
                     <input type="file" class="file-input" name="${field.name}" accept="${field.accept}" ${field.multiple ? 'multiple' : ''} ${field.required ? 'required' : ''}>
                     <div class="file-preview-container" id="preview_${field.name}"></div>
                 `;
@@ -400,6 +418,22 @@ document.addEventListener('DOMContentLoaded', () => {
     resetBtn.addEventListener('click', () => {
         resetWorkspaceUI();
         renderForm.reset();
+        
+        // Clear all library hidden inputs
+        renderForm.querySelectorAll('input[type="hidden"]').forEach(input => {
+            if (input.id && input.id.startsWith('library_input_')) {
+                input.value = '';
+            }
+        });
+        // Restore required attribute to file inputs
+        renderForm.querySelectorAll('.file-input').forEach(fileInput => {
+            const fieldName = fileInput.name;
+            const field = templateFieldsMap[fieldName];
+            if (field && field.required) {
+                fileInput.setAttribute('required', 'required');
+            }
+        });
+
         selectedFilesMap = {};
         const previews = renderForm.querySelectorAll('.file-preview-container');
         previews.forEach(p => p.innerHTML = '');
@@ -413,8 +447,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // === Media Center Feature ===
     const assetsGrid = document.getElementById('assetsGrid');
+    const musicGrid = document.getElementById('musicGrid');
     const videosGrid = document.getElementById('videosGrid');
     const tabAssetsBtn = document.getElementById('tabAssetsBtn');
+    const tabMusicBtn = document.getElementById('tabMusicBtn');
     const tabVideosBtn = document.getElementById('tabVideosBtn');
     
     const editModal = document.getElementById('editModal');
@@ -423,6 +459,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const editIdInput = document.getElementById('editId');
     const editNameInput = document.getElementById('editName');
     const editMemoInput = document.getElementById('editMemo');
+
+    const previewModal = document.getElementById('previewModal');
+    const previewTitle = document.getElementById('previewTitle');
+    const previewContentArea = document.getElementById('previewContentArea');
+    const previewMemo = document.getElementById('previewMemo');
+    const previewDate = document.getElementById('previewDate');
+    const previewDownloadBtn = document.getElementById('previewDownloadBtn');
 
     let currentTab = 'assets'; // 'assets' | 'videos'
 
@@ -440,12 +483,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Render cards
     function renderLibrary(data) {
+        const visualAssets = (data.assets || []).filter(item => item.type === 'image' || item.type === 'video');
+        const audioAssets = (data.assets || []).filter(item => item.type === 'audio');
+
         // Render assets
-        if (!data.assets || data.assets.length === 0) {
-            assetsGrid.innerHTML = '<div class="empty-state">尚未上傳過任何素材</div>';
-        } else {
-            assetsGrid.innerHTML = '';
-            data.assets.forEach(item => {
+        assetsGrid.innerHTML = `
+            <!-- Asset Upload Card -->
+            <div class="music-upload-card" id="assetUploadCard" onclick="triggerAssetUpload()">
+                <div class="music-upload-icon">📁</div>
+                <h4>上傳圖片/影片素材</h4>
+                <p>支援圖片 (JPG/PNG) 與短片 (MP4)</p>
+                <input type="file" id="assetFileInput" accept="image/*,video/*" style="display:none;" onchange="handleAssetUpload(event)">
+            </div>
+        `;
+        
+        if (visualAssets.length > 0) {
+            visualAssets.forEach(item => {
                 const card = document.createElement('div');
                 card.className = 'media-card';
                 
@@ -454,15 +507,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     previewHtml = `<img src="${item.url}" alt="${item.name}">`;
                 } else if (item.type === 'video') {
                     previewHtml = `<video src="${item.url}" muted loop playsinline onmouseover="this.play()" onmouseout="this.pause()"></video>`;
-                } else {
-                    // Audio
-                    previewHtml = `<div class="audio-preview-icon">🎵</div>`;
                 }
                 
                 const memoHtml = item.memo ? item.memo : '<span style="color:rgba(255,255,255,0.15)">點擊編輯按鈕為此素材新增備註描述...</span>';
                 
                 card.innerHTML = `
-                    <div class="media-preview">
+                    <div class="media-preview" style="cursor: pointer;" title="點擊預覽此項目" onclick="openPreviewModal('assets', '${item.filename}', \`${item.name.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`, \`${(item.memo || '').replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`, '${item.url}', '${item.type}', '${item.uploaded_at}')">
                         ${previewHtml}
                     </div>
                     <div class="media-info">
@@ -483,6 +533,45 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
+        // Render Music Grid (Custom Audio Files only)
+        musicGrid.innerHTML = `
+            <!-- Music Upload Card -->
+            <div class="music-upload-card" id="musicUploadCard" onclick="triggerMusicUpload()">
+                <div class="music-upload-icon">🎵</div>
+                <h4>上傳自訂配樂檔案</h4>
+                <p>支援 MP3 / WAV 格式</p>
+                <input type="file" id="musicFileInput" accept="audio/*" style="display:none;" onchange="handleMusicUpload(event)">
+            </div>
+        `;
+        
+        audioAssets.forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'media-card';
+            
+            const previewHtml = `<div class="audio-preview-icon">🎵</div>`;
+            const memoHtml = item.memo ? item.memo : '<span style="color:rgba(255,255,255,0.15)">點擊編輯按鈕為此配樂新增備註描述...</span>';
+            
+            card.innerHTML = `
+                <div class="media-preview" style="cursor: pointer;" title="點擊試聽此配樂" onclick="openPreviewModal('assets', '${item.filename}', \`${item.name.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`, \`${(item.memo || '').replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`, '${item.url}', 'audio', '${item.uploaded_at}')">
+                    ${previewHtml}
+                </div>
+                <div class="media-info">
+                    <div class="media-name" title="${item.name}">${item.name}</div>
+                    <div class="media-memo" title="${item.memo || ''}">${memoHtml}</div>
+                    <div class="media-date">${item.uploaded_at}</div>
+                </div>
+                <div class="media-actions">
+                    <button type="button" class="media-actions-btn edit-btn" onclick="openEditModal('assets', '${item.filename}', \`${item.name.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`, \`${(item.memo || '').replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`)">
+                        ✏️ 編輯
+                    </button>
+                    <button type="button" class="media-actions-btn delete-btn" onclick="deleteLibraryItem('assets', '${item.filename}')">
+                        🗑️ 刪除
+                    </button>
+                </div>
+            `;
+            musicGrid.appendChild(card);
+        });
+
         // Render videos
         if (!data.videos || data.videos.length === 0) {
             videosGrid.innerHTML = '<div class="empty-state">尚未生成過任何影片</div>';
@@ -496,7 +585,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const memoHtml = item.memo ? item.memo : '<span style="color:rgba(255,255,255,0.15)">沒有備註...</span>';
                 
                 card.innerHTML = `
-                    <div class="media-preview">
+                    <div class="media-preview" style="cursor: pointer;" title="點擊預覽此項目" onclick="openPreviewModal('videos', '${item.filename}', \`${item.name.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`, \`${(item.memo || '').replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`, '${item.url}', 'video', '${item.created_at}')">
                         ${previewHtml}
                     </div>
                     <div class="media-info">
@@ -521,15 +610,23 @@ document.addEventListener('DOMContentLoaded', () => {
     // Switch Tabs
     window.switchMediaTab = function(tabCategory) {
         currentTab = tabCategory;
+        
+        tabAssetsBtn.classList.remove('active');
+        tabMusicBtn.classList.remove('active');
+        tabVideosBtn.classList.remove('active');
+        
+        assetsGrid.classList.remove('active');
+        musicGrid.classList.remove('active');
+        videosGrid.classList.remove('active');
+        
         if (tabCategory === 'assets') {
             tabAssetsBtn.classList.add('active');
-            tabVideosBtn.classList.remove('active');
             assetsGrid.classList.add('active');
-            videosGrid.classList.remove('active');
+        } else if (tabCategory === 'music') {
+            tabMusicBtn.classList.add('active');
+            musicGrid.classList.add('active');
         } else {
-            tabAssetsBtn.classList.remove('active');
             tabVideosBtn.classList.add('active');
-            assetsGrid.classList.remove('active');
             videosGrid.classList.add('active');
         }
     };
@@ -546,6 +643,48 @@ document.addEventListener('DOMContentLoaded', () => {
     window.closeEditModal = function() {
         editModal.classList.remove('active');
         editForm.reset();
+    };
+
+    window.openPreviewModal = function(category, filename, name, memo, url, type, dateStr) {
+        previewTitle.textContent = type === 'image' ? '🖼️ 圖片預覽' : type === 'video' ? '📹 影片預覽' : '🎵 音訊預覽';
+        previewMemo.textContent = memo || (category === 'assets' ? '此素材無備註描述' : '此影片無備註描述');
+        previewDate.textContent = (category === 'assets' ? '上傳時間：' : '製作時間：') + dateStr;
+        previewDownloadBtn.href = url;
+        previewDownloadBtn.setAttribute('download', name);
+
+        previewContentArea.innerHTML = '';
+        if (type === 'image') {
+            const img = document.createElement('img');
+            img.src = url;
+            img.alt = name;
+            previewContentArea.appendChild(img);
+        } else if (type === 'video') {
+            const video = document.createElement('video');
+            video.src = url;
+            video.controls = true;
+            video.autoplay = true;
+            video.style.outline = 'none';
+            previewContentArea.appendChild(video);
+        } else if (type === 'audio') {
+            const audioContainer = document.createElement('div');
+            audioContainer.className = 'preview-audio-container';
+            audioContainer.innerHTML = `
+                <div class="preview-audio-icon">🎵</div>
+                <div style="font-weight:600; font-size:1.1rem; color:white; word-break:break-all; text-align:center; padding: 0 1rem;">${name}</div>
+                <audio src="${url}" controls autoplay style="outline:none;"></audio>
+            `;
+            previewContentArea.appendChild(audioContainer);
+        }
+
+        previewModal.classList.add('active');
+    };
+
+    window.closePreviewModal = function() {
+        const mediaElements = previewContentArea.querySelectorAll('video, audio');
+        mediaElements.forEach(el => el.pause());
+
+        previewModal.classList.remove('active');
+        previewContentArea.innerHTML = '';
     };
 
     // Form Update Submission
@@ -590,6 +729,493 @@ document.addEventListener('DOMContentLoaded', () => {
             loadLibrary(); // Reload list
         } catch (error) {
             alert(`刪除錯誤: ${error.message}`);
+        }
+    };
+
+    // === Template Builder Feature ===
+    window.addBuilderScene = function() {
+        customScenes.push({
+            duration: 3.0,
+            visual_type: 'image_zoom',
+            zoom_direction: 'in',
+            color: '#000000',
+            texts: []
+        });
+        renderBuilderTimeline();
+    };
+
+    window.deleteBuilderScene = function(index) {
+        customScenes.splice(index, 1);
+        renderBuilderTimeline();
+    };
+
+    window.addSceneText = function(sceneIndex) {
+        customScenes[sceneIndex].texts.push({
+            content: '我的文字疊加',
+            font_size: 40,
+            color: '#ffffff',
+            position: 'center',
+            start_time: 0.0,
+            end_time: customScenes[sceneIndex].duration
+        });
+        renderBuilderTimeline();
+    };
+
+    window.deleteSceneText = function(sceneIndex, textIndex) {
+        customScenes[sceneIndex].texts.splice(textIndex, 1);
+        renderBuilderTimeline();
+    };
+
+    window.updateSceneConfig = function(index, key, val) {
+        if (key === 'duration') {
+            customScenes[index].duration = parseFloat(val) || 3.0;
+        } else if (key === 'visual_type') {
+            customScenes[index].visual_type = val;
+            renderBuilderTimeline(); // Redraw since visual type alters columns
+        } else {
+            customScenes[index][key] = val;
+        }
+    };
+
+    window.updateTextConfig = function(sIdx, tIdx, key, val) {
+        if (key === 'font_size') {
+            customScenes[sIdx].texts[tIdx].font_size = parseInt(val) || 40;
+        } else if (key === 'start_time') {
+            customScenes[sIdx].texts[tIdx].start_time = parseFloat(val) || 0.0;
+        } else if (key === 'end_time') {
+            customScenes[sIdx].texts[tIdx].end_time = parseFloat(val) || 0.0;
+        } else {
+            customScenes[sIdx].texts[tIdx][key] = val;
+        }
+    };
+
+    function renderBuilderTimeline() {
+        const scenesTimeline = document.getElementById('scenesTimeline');
+        if (customScenes.length === 0) {
+            scenesTimeline.innerHTML = `
+                <div class="empty-state" style="padding: 5rem 2rem;">
+                    <h4>尚未加入任何分鏡場景</h4>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.5rem; margin-bottom: 1.5rem;">
+                        請點擊右上角的按鈕來建立您影片的第一個場景。
+                    </p>
+                    <button type="button" class="add-scene-btn" onclick="addBuilderScene()">＋ 建立第一個場景</button>
+                </div>
+            `;
+            return;
+        }
+        
+        scenesTimeline.innerHTML = '';
+        customScenes.forEach((scene, sIdx) => {
+            const card = document.createElement('div');
+            card.className = 'builder-scene-card';
+            
+            let visualConfigHtml = '';
+            if (scene.visual_type === 'image_zoom') {
+                visualConfigHtml = `
+                    <div class="scene-config-col">
+                        <label>縮放動畫方向</label>
+                        <select class="text-item-config" style="width:100%;" onchange="updateSceneConfig(${sIdx}, 'zoom_direction', this.value)">
+                            <option value="in" ${scene.zoom_direction === 'in' ? 'selected' : ''}>🔍 慢速放大 (Zoom In)</option>
+                            <option value="out" ${scene.zoom_direction === 'out' ? 'selected' : ''}>🔎 慢速縮小 (Zoom Out)</option>
+                        </select>
+                    </div>
+                `;
+            } else if (scene.visual_type === 'solid_color') {
+                visualConfigHtml = `
+                    <div class="scene-config-col">
+                        <label>背景顏色</label>
+                        <input type="color" class="text-item-config" style="padding:0.1rem; height: 35px; width: 100%; cursor:pointer;" value="${scene.color}" onchange="updateSceneConfig(${sIdx}, 'color', this.value)">
+                    </div>
+                `;
+            }
+            
+            let textsListHtml = '';
+            if (scene.texts.length === 0) {
+                textsListHtml = `<div style="font-size:0.8rem; color:rgba(255,255,255,0.2); text-align:center; padding:0.5rem;">無文字疊加層</div>`;
+            } else {
+                scene.texts.forEach((text, tIdx) => {
+                    textsListHtml += `
+                        <div class="scene-text-item">
+                            <input type="text" class="text-item-input" value="${text.content}" placeholder="輸入文字..." oninput="updateTextConfig(${sIdx}, ${tIdx}, 'content', this.value)">
+                            
+                            <select class="text-item-config" style="width:auto; flex:none;" onchange="updateTextConfig(${sIdx}, ${tIdx}, 'position', this.value)">
+                                <option value="center" ${text.position === 'center' ? 'selected' : ''}>置中</option>
+                                <option value="top" ${text.position === 'top' ? 'selected' : ''}>頂部</option>
+                                <option value="bottom" ${text.position === 'bottom' ? 'selected' : ''}>底部</option>
+                            </select>
+                            
+                            <input type="color" class="text-item-config" style="padding: 0.1rem; height: 32px; width: 45px; flex:none; cursor:pointer;" value="${text.color}" onchange="updateTextConfig(${sIdx}, ${tIdx}, 'color', this.value)">
+                            
+                            <input type="number" class="text-item-num" placeholder="字級" title="字體大小" value="${text.font_size}" oninput="updateTextConfig(${sIdx}, ${tIdx}, 'font_size', this.value)">
+                            
+                            <input type="number" step="0.1" class="text-item-num" placeholder="起(秒)" title="開始時間" value="${text.start_time}" oninput="updateTextConfig(${sIdx}, ${tIdx}, 'start_time', this.value)">
+                            <input type="number" step="0.1" class="text-item-num" placeholder="迄(秒)" title="結束時間" value="${text.end_time}" oninput="updateTextConfig(${sIdx}, ${tIdx}, 'end_time', this.value)">
+                            
+                            <button type="button" class="delete-text-btn" onclick="deleteSceneText(${sIdx}, ${tIdx})">&times;</button>
+                        </div>
+                    `;
+                });
+            }
+            
+            card.innerHTML = `
+                <div class="scene-card-header">
+                    <span class="scene-number">🎬 場景 #${sIdx + 1}</span>
+                    <button type="button" class="delete-scene-btn" onclick="deleteBuilderScene(${sIdx})">🗑️ 刪除場景</button>
+                </div>
+                
+                <div class="scene-config-row">
+                    <div class="scene-config-col">
+                        <label>場景時長 (秒)</label>
+                        <input type="number" step="0.1" min="1" max="15" class="form-input" style="padding: 0.5rem; font-size:0.85rem;" value="${scene.duration}" oninput="updateSceneConfig(${sIdx}, 'duration', this.value)">
+                    </div>
+                    
+                    <div class="scene-config-col">
+                        <label>視覺功能類型</label>
+                        <select class="text-item-config" style="width:100%;" onchange="updateSceneConfig(${sIdx}, 'visual_type', this.value)">
+                            <option value="image_zoom" ${scene.visual_type === 'image_zoom' ? 'selected' : ''}>🖼️ 圖片縮放動畫</option>
+                            <option value="user_video" ${scene.visual_type === 'user_video' ? 'selected' : ''}>📹 影片短片剪輯</option>
+                            <option value="solid_color" ${scene.visual_type === 'solid_color' ? 'selected' : ''}>🎨 單色背景影格</option>
+                        </select>
+                    </div>
+                    
+                    ${visualConfigHtml}
+                </div>
+                
+                <div class="scene-texts-section">
+                    <div class="texts-header">
+                        <h4>📝 文字疊加時序</h4>
+                        <button type="button" class="add-text-btn" onclick="addSceneText(${sIdx})">＋ 新增文字</button>
+                    </div>
+                    <div class="texts-list">
+                        ${textsListHtml}
+                    </div>
+                </div>
+            `;
+            
+            scenesTimeline.appendChild(card);
+        });
+    }
+
+    window.saveCustomTemplate = async function() {
+        const nameInput = document.getElementById('builderName');
+        const descInput = document.getElementById('builderDesc');
+        const ratioInput = document.getElementById('builderRatio');
+        
+        const name = nameInput.value.trim();
+        if (!name) {
+            alert('請輸入範本名稱！');
+            return;
+        }
+        
+        if (customScenes.length === 0) {
+            alert('請至少加入一個場景分鏡！');
+            return;
+        }
+        
+        const payload = {
+            name: name,
+            description: descInput.value.trim(),
+            aspect_ratio: ratioInput.value,
+            scenes: customScenes
+        };
+        
+        try {
+            const res = await fetch('/api/templates/custom', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+            
+            if (!res.ok) throw new Error('儲存範本失敗');
+            
+            alert('🎉 自訂範本儲存並發佈成功！');
+            
+            // Reset Builder
+            document.getElementById('builderForm').reset();
+            customScenes = [];
+            renderBuilderTimeline();
+            
+            // Reload maker templates grid
+            await loadTemplates();
+            
+            // Switch back to Maker tab
+            const creatorTab = document.querySelector('.nav-tab[data-tab="maker"]');
+            if (creatorTab) creatorTab.click();
+            
+        } catch (error) {
+            alert(`發佈錯誤: ${error.message}`);
+        }
+    };
+
+    // Initialize builder timeline empty state
+    renderBuilderTimeline();
+
+    // === Music Library Upload Handlers ===
+    window.triggerMusicUpload = function() {
+        document.getElementById('musicFileInput').click();
+    };
+
+    window.handleMusicUpload = async function(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        // Validation
+        const validTypes = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/wave'];
+        if (!validTypes.includes(file.type) && !file.name.endsWith('.mp3') && !file.name.endsWith('.wav')) {
+            alert('不支援的檔案格式，請上傳 MP3 或 WAV 音訊檔案！');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            // Show loading placeholder on card
+            const uploadCard = document.getElementById('musicUploadCard');
+            uploadCard.style.pointerEvents = 'none';
+            uploadCard.innerHTML = `
+                <div class="progress-loader" style="width:40px; height:40px; border-width:3px; margin-bottom:1rem;"></div>
+                <h4>正在上傳配樂...</h4>
+                <p>${file.name.substring(0, 20)}</p>
+            `;
+
+            const res = await fetch('/api/library/upload', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!res.ok) throw new Error('上傳失敗');
+
+            // Reset file input
+            event.target.value = '';
+            
+            // Reload templates and library so the new music immediately appears in dropdowns and the list
+            await loadLibrary();
+            await loadTemplates();
+        } catch (error) {
+            alert(`上傳錯誤: ${error.message}`);
+            // Restore card content
+            const uploadCard = document.getElementById('musicUploadCard');
+            uploadCard.style.pointerEvents = 'auto';
+            uploadCard.innerHTML = `
+                <div class="music-upload-icon">🎵</div>
+                <h4>上傳自訂配樂檔案</h4>
+                <p>支援 MP3 / WAV 格式</p>
+                <input type="file" id="musicFileInput" accept="audio/*" style="display:none;" onchange="handleMusicUpload(event)">
+            `;
+        }
+    };
+
+    // === Asset Library Upload Handlers ===
+    window.triggerAssetUpload = function() {
+        document.getElementById('assetFileInput').click();
+    };
+
+    window.handleAssetUpload = async function(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        // Validation
+        const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/quicktime'];
+        if (!validTypes.includes(file.type) && !file.name.endsWith('.jpg') && !file.name.endsWith('.png') && !file.name.endsWith('.mp4')) {
+            alert('不支援的檔案格式，請上傳 JPG、PNG 圖片或 MP4 影片！');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            // Show loading placeholder on card
+            const uploadCard = document.getElementById('assetUploadCard');
+            uploadCard.style.pointerEvents = 'none';
+            uploadCard.innerHTML = `
+                <div class="progress-loader" style="width:40px; height:40px; border-width:3px; margin-bottom:1rem;"></div>
+                <h4>正在上傳素材...</h4>
+                <p>${file.name.substring(0, 20)}</p>
+            `;
+
+            const res = await fetch('/api/library/upload', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!res.ok) throw new Error('上傳失敗');
+
+            // Reset input
+            event.target.value = '';
+            
+            // Reload library
+            await loadLibrary();
+        } catch (error) {
+            alert(`上傳錯誤: ${error.message}`);
+            // Restore card content
+            const uploadCard = document.getElementById('assetUploadCard');
+            uploadCard.style.pointerEvents = 'auto';
+            uploadCard.innerHTML = `
+                <div class="music-upload-icon">📁</div>
+                <h4>上傳圖片/影片素材</h4>
+                <p>支援圖片 (JPG/PNG) 與短片 (MP4)</p>
+                <input type="file" id="assetFileInput" accept="image/*,video/*" style="display:none;" onchange="handleAssetUpload(event)">
+            `;
+        }
+    };
+
+    // === Library Selection Dialog and Modal logic ===
+    let currentSelectField = '';
+    let currentSelectMultiple = false;
+    let selectedLibraryItems = []; // Array of filenames
+
+    window.openLibrarySelect = async function(fieldName, isMultiple, acceptType) {
+        currentSelectField = fieldName;
+        currentSelectMultiple = isMultiple;
+        selectedLibraryItems = [];
+        
+        const titleEl = document.getElementById('librarySelectTitle');
+        const gridEl = document.getElementById('librarySelectGrid');
+        
+        titleEl.textContent = `📁 從媒體庫選擇素材 (${isMultiple ? '可複選' : '單選'})`;
+        gridEl.innerHTML = '<div class="empty-state">正在載入媒體庫...</div>';
+        
+        document.getElementById('librarySelectModal').classList.add('active');
+        
+        try {
+            const res = await fetch('/api/library');
+            if (!res.ok) throw new Error('無法載入媒體庫');
+            const data = await res.json();
+            
+            // Filter assets by accept type
+            let filtered = [];
+            if (acceptType.includes('image')) {
+                filtered = (data.assets || []).filter(item => item.type === 'image');
+            } else if (acceptType.includes('video')) {
+                filtered = (data.assets || []).filter(item => item.type === 'video');
+            } else if (acceptType.includes('audio')) {
+                filtered = (data.assets || []).filter(item => item.type === 'audio');
+            } else {
+                filtered = data.assets || [];
+            }
+            
+            if (filtered.length === 0) {
+                gridEl.innerHTML = '<div class="empty-state">媒體庫中暫無符合類型的素材</div>';
+                return;
+            }
+            
+            gridEl.innerHTML = '';
+            filtered.forEach(item => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'library-select-item';
+                itemDiv.dataset.filename = item.filename;
+                
+                let previewHtml = '';
+                if (item.type === 'image') {
+                    previewHtml = `<img src="${item.url}" alt="${item.name}">`;
+                } else if (item.type === 'video') {
+                    previewHtml = `<video src="${item.url}" muted playsinline></video>`;
+                } else {
+                    previewHtml = `<div style="font-size:2rem;">🎵</div>`;
+                }
+                
+                itemDiv.innerHTML = `
+                    <div class="library-select-preview">${previewHtml}</div>
+                    <div class="library-select-name" title="${item.name}">${item.name}</div>
+                    <div class="select-badge">✓</div>
+                `;
+                
+                itemDiv.addEventListener('click', () => {
+                    if (isMultiple) {
+                        itemDiv.classList.toggle('selected');
+                        const idx = selectedLibraryItems.indexOf(item.filename);
+                        if (idx > -1) {
+                            selectedLibraryItems.splice(idx, 1);
+                        } else {
+                            selectedLibraryItems.push(item.filename);
+                        }
+                    } else {
+                        // Clear others
+                        gridEl.querySelectorAll('.library-select-item').forEach(el => el.classList.remove('selected'));
+                        itemDiv.classList.add('selected');
+                        selectedLibraryItems = [item.filename];
+                    }
+                });
+                
+                gridEl.appendChild(itemDiv);
+            });
+        } catch (error) {
+            gridEl.innerHTML = `<div class="empty-state">載入失敗: ${error.message}</div>`;
+        }
+    };
+
+    window.closeLibrarySelectModal = function() {
+        document.getElementById('librarySelectModal').classList.remove('active');
+    };
+    
+    // Bind Confirm Button
+    document.getElementById('confirmLibrarySelectBtn').addEventListener('click', () => {
+        if (selectedLibraryItems.length === 0) {
+            alert('請至少選擇一個項目！');
+            return;
+        }
+        
+        const fieldName = currentSelectField;
+        const hiddenInput = document.getElementById(`library_input_${fieldName}`);
+        const fileInput = document.querySelector(`#group_${fieldName} .file-input`);
+        const previewContainer = document.getElementById(`preview_${fieldName}`);
+        
+        hiddenInput.value = selectedLibraryItems.join(',');
+        
+        // Clear local files and remove required attribute
+        fileInput.value = '';
+        fileInput.removeAttribute('required');
+        
+        // Render selected library items preview
+        previewContainer.innerHTML = '';
+        selectedLibraryItems.forEach((filename, idx) => {
+            const previewCard = document.createElement('div');
+            previewCard.className = 'file-preview-card';
+            previewCard.innerHTML = `
+                <span style="font-size:1rem; margin-right:0.3rem;">📁</span>
+                <span style="font-size:0.8rem; flex-grow:1; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${filename}">${filename}</span>
+                <span class="remove-file-btn" onclick="removeLibrarySelection('${fieldName}', ${idx})">&times;</span>
+            `;
+            previewContainer.appendChild(previewCard);
+        });
+        
+        closeLibrarySelectModal();
+    });
+
+    window.removeLibrarySelection = function(fieldName, idx) {
+        const hiddenInput = document.getElementById(`library_input_${fieldName}`);
+        const fileInput = document.querySelector(`#group_${fieldName} .file-input`);
+        const previewContainer = document.getElementById(`preview_${fieldName}`);
+        
+        let items = hiddenInput.value.split(',');
+        items.splice(idx, 1);
+        
+        if (items.length === 0 || items[0] === '') {
+            hiddenInput.value = '';
+            previewContainer.innerHTML = '';
+            // Restore required attribute if needed
+            const field = templateFieldsMap[fieldName];
+            if (field && field.required) {
+                fileInput.setAttribute('required', 'required');
+            }
+        } else {
+            hiddenInput.value = items.join(',');
+            // Re-render
+            previewContainer.innerHTML = '';
+            items.forEach((filename, i) => {
+                const previewCard = document.createElement('div');
+                previewCard.className = 'file-preview-card';
+                previewCard.innerHTML = `
+                    <span style="font-size:1rem; margin-right:0.3rem;">📁</span>
+                    <span style="font-size:0.8rem; flex-grow:1; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${filename}">${filename}</span>
+                    <span class="remove-file-btn" onclick="removeLibrarySelection('${fieldName}', ${i})">&times;</span>
+                `;
+                previewContainer.appendChild(previewCard);
+            });
         }
     };
 });

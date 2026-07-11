@@ -23,6 +23,7 @@
             </div>
             <nav class="header-nav">
                 <button class="nav-tab active" data-tab="maker">影片製作</button>
+                <button class="nav-tab" data-tab="builder">範本自訂工坊</button>
                 <button class="nav-tab" data-tab="media">媒體中心</button>
             </nav>
         </div>
@@ -100,6 +101,53 @@
             </section>
         </div>
 
+        <!-- Panel 3: Template Builder (範本自訂工坊) -->
+        <div id="builderView" class="view-panel">
+            <section class="builder-section" id="builderSection">
+                <div class="builder-container">
+                    
+                    <!-- Left Sidebar - Template Settings -->
+                    <div class="builder-sidebar">
+                        <h2 class="builder-sidebar-title">🛠️ 建立自訂影片範本</h2>
+                        <form id="builderForm" onsubmit="event.preventDefault(); saveCustomTemplate();">
+                            <div class="form-group">
+                                <label for="builderName">範本名稱 *</label>
+                                <input type="text" id="builderName" required placeholder="例如：我的動態商品輪播" class="form-input">
+                            </div>
+                            <div class="form-group">
+                                <label for="builderDesc">範本詳細描述</label>
+                                <textarea id="builderDesc" rows="3" placeholder="描述這個範本的風格與分鏡用途..." class="form-input" style="font-family:inherit; resize:vertical;"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="builderRatio">影片畫面比例 *</label>
+                                <select id="builderRatio" class="form-select">
+                                    <option value="9:16">9:16 直式 (TikTok/Shorts - 推薦)</option>
+                                    <option value="16:9">16:9 橫式 (YouTube/簡報影片)</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="submit-btn" style="background: linear-gradient(135deg, var(--accent-color), var(--neon-blue)); border: none; box-shadow: 0 4px 12px var(--accent-glow);">
+                                💾 儲存並發佈範本
+                            </button>
+                        </form>
+                    </div>
+                    
+                    <!-- Right Area - Timeline and Scenes -->
+                    <div class="builder-timeline">
+                        <div class="timeline-header">
+                            <h3>🎬 範本場景時間軸 (Timeline)</h3>
+                            <button type="button" class="add-scene-btn" onclick="addBuilderScene()">＋ 新增場景</button>
+                        </div>
+                        
+                        <!-- Timeline container for dynamic scene cards -->
+                        <div class="scenes-timeline-container" id="scenesTimeline">
+                            <!-- Populated dynamically by app.js -->
+                        </div>
+                    </div>
+                    
+                </div>
+            </section>
+        </div>
+
         <!-- Panel 2: Media Center (媒體中心) -->
         <div id="mediaView" class="view-panel">
             <!-- 4. Media Center Section (Persistent Gallery) -->
@@ -108,14 +156,33 @@
                     <h2>📁 媒體中心 (Media Center)</h2>
                     <div class="media-tabs">
                         <button type="button" class="tab-btn active" id="tabAssetsBtn" onclick="switchMediaTab('assets')">素材庫</button>
+                        <button type="button" class="tab-btn" id="tabMusicBtn" onclick="switchMediaTab('music')">配樂庫</button>
                         <button type="button" class="tab-btn" id="tabVideosBtn" onclick="switchMediaTab('videos')">歷史影片</button>
                     </div>
                 </div>
                 
                 <!-- Materials Grid -->
                 <div class="media-grid active" id="assetsGrid">
+                    <!-- Asset Upload Card -->
+                    <div class="music-upload-card" id="assetUploadCard" onclick="triggerAssetUpload()">
+                        <div class="music-upload-icon">📁</div>
+                        <h4>上傳圖片/影片素材</h4>
+                        <p>支援圖片 (JPG/PNG) 與短片 (MP4)</p>
+                        <input type="file" id="assetFileInput" accept="image/*,video/*" style="display:none;" onchange="handleAssetUpload(event)">
+                    </div>
                     <!-- Loaded dynamically by app.js -->
-                    <div class="empty-state">尚未上傳過任何素材</div>
+                </div>
+
+                <!-- Music Grid -->
+                <div class="media-grid" id="musicGrid">
+                    <!-- Music Upload Card -->
+                    <div class="music-upload-card" id="musicUploadCard" onclick="triggerMusicUpload()">
+                        <div class="music-upload-icon">🎵</div>
+                        <h4>上傳自訂配樂檔案</h4>
+                        <p>支援 MP3 / WAV 格式</p>
+                        <input type="file" id="musicFileInput" accept="audio/*" style="display:none;" onchange="handleMusicUpload(event)">
+                    </div>
+                    <!-- Loaded dynamically by app.js -->
                 </div>
                 
                 <!-- Videos Grid -->
@@ -149,6 +216,48 @@
                         <button type="submit" class="modal-btn save-btn">儲存修改</button>
                     </div>
                 </form>
+            </div>
+        </div>
+
+        <!-- Preview Modal Dialog (Lightbox) -->
+        <div class="modal-overlay" id="previewModal">
+            <div class="preview-modal-card">
+                <div class="modal-header">
+                    <h3 id="previewTitle">📄 素材預覽</h3>
+                    <button type="button" class="close-modal-btn" onclick="closePreviewModal()">×</button>
+                </div>
+                <div class="preview-content-area" id="previewContentArea">
+                    <!-- Dynamically populated based on media type -->
+                </div>
+                <div class="preview-meta-info">
+                    <p id="previewMemo" class="preview-memo-text"></p>
+                    <span id="previewDate" class="preview-date-text"></span>
+                </div>
+                <div class="modal-actions" style="margin-top: 1rem;">
+                    <a href="#" class="modal-btn save-btn" id="previewDownloadBtn" download style="text-decoration: none; display: inline-flex; align-items: center; gap: 8px;">
+                        📥 下載檔案
+                    </a>
+                    <button type="button" class="modal-btn cancel-btn" onclick="closePreviewModal()">關閉</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Library Selection Modal -->
+        <div id="librarySelectModal" class="modal-overlay">
+            <div class="preview-modal-card select-modal-card">
+                <div class="modal-header" style="border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom:1rem; margin-bottom:1rem; display:flex; justify-content:space-between; align-items:center;">
+                    <h3 id="librarySelectTitle" style="margin:0; color:white;">📁 從媒體庫選擇素材</h3>
+                    <button type="button" class="close-modal-btn" onclick="closeLibrarySelectModal()">&times;</button>
+                </div>
+                
+                <div class="library-select-grid" id="librarySelectGrid">
+                    <!-- Dynamically populated -->
+                </div>
+                
+                <div class="modal-footer" style="margin-top:1.5rem; display:flex; justify-content:flex-end; gap:1rem;">
+                    <button type="button" class="modal-btn cancel-btn" onclick="closeLibrarySelectModal()">取消</button>
+                    <button type="button" class="modal-btn save-btn" id="confirmLibrarySelectBtn">確定選擇</button>
+                </div>
             </div>
         </div>
 

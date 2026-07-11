@@ -5,7 +5,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 # Import MoviePy 2.x classes directly from package
 try:
-    from moviepy import VideoFileClip, ImageClip, ColorClip, CompositeVideoClip, AudioFileClip, AudioClip, vfx
+    from moviepy import VideoFileClip, ImageClip, ColorClip, CompositeVideoClip, AudioFileClip, AudioClip, vfx, concatenate_videoclips
     from moviepy.audio.fx import AudioFadeIn, AudioFadeOut, AudioLoop
 except ImportError as e:
     print(f"Error importing MoviePy 2.x: {e}")
@@ -16,6 +16,7 @@ except ImportError as e:
     AudioFileClip = None
     AudioClip = None
     vfx = None
+    concatenate_videoclips = None
     AudioFadeIn = None
     AudioFadeOut = None
     AudioLoop = None
@@ -635,18 +636,264 @@ def generate_product_promo_video(task_id, images_paths, brand_name, product_name
     progress_callback(task_id, 100, "影片生成完成！")
 
 
-def generate_default_previews(templates_dir, assets_dir):
+def create_custom_text_overlay(text_items, width, height, duration):
+    """Creates a transparent ImageClip overlay with multiple text items positioned custom-style using Pillow."""
+    image = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(image)
+    
+    font_cache = {}
+    
+    def get_font(size):
+        if size in font_cache:
+            return font_cache[size]
+        font_bold = None
+        font_names = []
+        if sys.platform.startswith("win"):
+            font_names = ["msjhbd.ttc", "msjh.ttc", "arialbd.ttf", "arial.ttf", "simsun.ttc"]
+        elif sys.platform.startswith("darwin"):
+            font_names = ["/System/Library/Fonts/PingFang.ttc", "/Library/Fonts/Arial.ttf"]
+        else:
+            font_names = ["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"]
+            
+        for fn in font_names:
+            try:
+                font_bold = ImageFont.truetype(fn, size)
+                break
+            except Exception:
+                continue
+        if not font_bold:
+            font_bold = ImageFont.load_default()
+        font_cache[size] = font_bold
+        return font_bold
+
+    for item in text_items:
+        content = item.get("content", "")
+        if not content:
+            continue
+        
+        size = int(item.get("font_size", 40))
+        color_hex = item.get("color", "#ffffff")
+        position = item.get("position", "center")
+        
+        # Parse color hex to RGBA
+        try:
+            h = color_hex.lstrip('#')
+            fill_color = tuple(int(h[i:i+2], 16) for i in (0, 2, 4)) + (255,)
+        except Exception:
+            fill_color = (255, 255, 255, 255)
+            
+        font = get_font(size)
+        
+        # Calculate size
+        try:
+            if hasattr(font, 'getbbox'):
+                bbox = font.getbbox(content)
+                w_t = bbox[2] - bbox[0]
+                h_t = bbox[3] - bbox[1]
+            else:
+                w_t, h_t = font.getsize(content)
+        except Exception:
+            w_t = len(content) * size * 0.6
+            h_t = size
+            
+        # Parse position
+        if position == "top":
+            x = (width - w_t) // 2
+            y = int(height * 0.15)
+        elif position == "bottom":
+            x = (width - w_t) // 2
+            y = int(height * 0.75)
+        elif "," in position:
+            try:
+                px, py = position.split(",")
+                x = int(float(px) * width) if float(px) < 1 else int(px)
+                y = int(float(py) * height) if float(py) < 1 else int(py)
+            except Exception:
+                x = (width - w_t) // 2
+                y = (height - h_t) // 2
+        else: # center
+            x = (width - w_t) // 2
+            y = (height - h_t) // 2
+            
+        # Draw soft shadow for readability
+        draw.text((x + 2, y + 2), content, fill=(0, 0, 0, 180), font=font)
+        draw.text((x, y), content, fill=fill_color, font=font)
+        
+    overlay = ImageClip(np.array(image))
+    overlay = overlay.with_duration(duration)
+    return overlay
+
+
+def generate_custom_template_video(task_id, custom_tpl, file_paths, bg_music, output_path, progress_callback):
+    """
+    Renders a custom template video containing multiple user-defined scenes,
+    applying zoom animations, text timelines, and background music.
+    """
+    progress_callback(task_id, 10, "正在加載自訂影片範本設定...")
+    
+    aspect_ratio = custom_tpl.get("aspect_ratio", "9:16")
+    if aspect_ratio == "16:9":
+        width, height = 1280, 720
+    else:
+        width, height = 720, 1280
+        
+    scenes = custom_tpl.get("scenes", [])
+    clips = []
+    
+    total_scenes = len(scenes)
+    for idx, scene in enumerate(scenes):
+        progress_callback(task_id, int(10 + (idx / total_scenes) * 50), f"正在合成場景 {idx+1}/{total_scenes}...")
+        
+        duration = float(scene.get("duration", 3.0))
+        visual_type = scene.get("visual_type", "image_zoom")
+        
+        base_clip = None
+        
+        if visual_type == "image_zoom":
+            field_name = scene.get("asset_field", f"scene_{idx}_file")
+            image_path = file_paths.get(field_name)
+            
+            if not image_path or not os.path.exists(image_path):
+                from moviepy.video.VideoClip import ColorClip
+                base_clip = ColorClip(size=(width, height), color=(60, 60, 60), duration=duration)
+            else:
+                cropped_img = process_promo_image(image_path, width, height)
+                
+                temp_cropped_path = image_path + "_cropped.png"
+                cropped_img.save(temp_cropped_path)
+                
+                img_clip = ImageClip(temp_cropped_path).with_duration(duration)
+                
+                try: os.remove(temp_cropped_path)
+                except Exception: pass
+                
+                zoom_dir = scene.get("zoom_direction", "in")
+                if zoom_dir == "in":
+                    resize_func = lambda t: 1.0 + (0.08 * (t / duration))
+                else:
+                    resize_func = lambda t: 1.08 - (0.08 * (t / duration))
+                    
+                base_clip = img_clip.resized(resize_func)
+                
+        elif visual_type == "user_video":
+            field_name = scene.get("asset_field", f"scene_{idx}_file")
+            video_path = file_paths.get(field_name)
+            
+            if not video_path or not os.path.exists(video_path):
+                from moviepy.video.VideoClip import ColorClip
+                base_clip = ColorClip(size=(width, height), color=(60, 60, 60), duration=duration)
+            else:
+                user_clip = VideoFileClip(video_path)
+                
+                clip_dur = user_clip.duration
+                if clip_dur < duration:
+                    base_clip = user_clip.subclipped(0, clip_dur).with_duration(duration)
+                else:
+                    base_clip = user_clip.subclipped(0, duration)
+                    
+                clip_w, clip_h = base_clip.size
+                scale = max(width / clip_w, height / clip_h)
+                scaled_w, scaled_h = int(clip_w * scale), int(clip_h * scale)
+                
+                base_clip = base_clip.resized((scaled_w, scaled_h))
+                crop_x = (scaled_w - width) // 2
+                crop_y = (scaled_h - height) // 2
+                
+                from moviepy.video.fx.Crop import Crop
+                base_clip = base_clip.with_effects([Crop(x1=crop_x, y1=crop_y, width=width, height=height)])
+                
+        elif visual_type == "solid_color":
+            color_hex = scene.get("color", "#000000")
+            try:
+                h = color_hex.lstrip('#')
+                col_rgb = tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+            except Exception:
+                col_rgb = (0, 0, 0)
+                
+            from moviepy.video.VideoClip import ColorClip
+            base_clip = ColorClip(size=(width, height), color=col_rgb, duration=duration)
+            
+        else:
+            from moviepy.video.VideoClip import ColorClip
+            base_clip = ColorClip(size=(width, height), color=(0, 0, 0), duration=duration)
+            
+        text_items = scene.get("texts", [])
+        scene_composited_clips = [base_clip]
+        
+        for text in text_items:
+            content = text.get("content", "")
+            if not content:
+                continue
+            start_t = max(0.0, float(text.get("start_time", 0.0)))
+            end_t = min(duration, float(text.get("end_time", duration)))
+            if start_t >= end_t:
+                continue
+                
+            text_duration = end_t - start_t
+            text_clip = create_custom_text_overlay([text], width, height, text_duration)
+            text_clip = text_clip.with_start(start_t)
+            
+            scene_composited_clips.append(text_clip)
+            
+        scene_final_clip = CompositeVideoClip(scene_composited_clips, size=(width, height)).with_duration(duration)
+        clips.append(scene_final_clip)
+        
+    progress_callback(task_id, 70, "正在連接所有自訂場景...")
+    final_video = concatenate_videoclips(clips, method="compose")
+    
+    if bg_music and os.path.exists(bg_music):
+        progress_callback(task_id, 80, "正在合成背景音樂...")
+        try:
+            audio = AudioFileClip(bg_music)
+            if audio.duration < final_video.duration:
+                from moviepy.audio.fx.AudioLoop import AudioLoop
+                audio = audio.with_effects([AudioLoop(duration=final_video.duration)])
+            else:
+                audio = audio.subclipped(0, final_video.duration)
+                
+            from moviepy.audio.fx.AudioFadeOut import AudioFadeOut
+            audio = audio.with_effects([AudioFadeOut(1.5)])
+            audio = audio.multiply_volume(0.7)
+            
+            final_video = final_video.with_audio(audio)
+        except Exception as ae:
+            print(f"Error mixing audio in custom template: {ae}")
+            
+    progress_callback(task_id, 85, "正在啟動自訂影片編碼渲染...")
+    logger = CustomMoviePyLogger(task_id, progress_callback)
+    
+    final_video.write_videofile(
+        output_path,
+        fps=24,
+        codec="libx264",
+        audio_codec="aac",
+        logger=logger
+    )
+    
+    final_video.close()
+    for c in clips:
+        c.close()
+        
+    progress_callback(task_id, 100, "影片生成完成！")
+
+
+def generate_default_previews(templates_dir, library_photos_dir, library_music_dir):
     """Automatically pre-generate preview videos for the templates using programmatically generated assets."""
     os.makedirs(templates_dir, exist_ok=True)
-    os.makedirs(assets_dir, exist_ok=True)
+    os.makedirs(library_photos_dir, exist_ok=True)
+    os.makedirs(library_music_dir, exist_ok=True)
+    
+    library_dir = os.path.dirname(library_photos_dir)
+    library_movies_dir = os.path.join(library_dir, "movies")
+    os.makedirs(library_movies_dir, exist_ok=True)
     
     slideshow_preview = os.path.join(templates_dir, "slideshow_preview.mp4")
     meme_preview = os.path.join(templates_dir, "meme_preview.mp4")
     intro_preview = os.path.join(templates_dir, "intro_preview.mp4")
     promo_preview = os.path.join(templates_dir, "promo_preview.mp4")
     
-    # 1. Write a dummy beep sound to assets for intro / slideshow background
-    beep_path = os.path.join(assets_dir, "default_audio.mp3")
+    # 1. Write a dummy beep sound to library/music for intro / slideshow background
+    beep_path = os.path.join(library_music_dir, "default_audio.mp3")
     if not os.path.exists(beep_path):
         # Generate simple sound file using moviepy synthesized tone
         def make_tone(t):
@@ -660,19 +907,19 @@ def generate_default_previews(templates_dir, assets_dir):
     dummy_imgs = []
     colors = [(220, 50, 50), (50, 220, 50), (50, 50, 220)]
     for idx, col in enumerate(colors):
-        path = os.path.join(assets_dir, f"temp_slide_{idx}.png")
+        path = os.path.join(library_photos_dir, f"temp_slide_{idx}.png")
         img = Image.new("RGB", (1280, 720), col)
         draw = ImageDraw.Draw(img)
         draw.text((640 - 50, 360 - 20), f"Sample Slide {idx+1}", fill=(255,255,255))
         img.save(path)
         dummy_imgs.append(path)
         
-    dummy_logo = os.path.join(assets_dir, "default_logo.png")
+    dummy_logo = os.path.join(library_photos_dir, "default_logo.png")
     if not os.path.exists(dummy_logo):
         img = Image.new("RGBA", (300, 300), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
         draw.ellipse([50, 50, 250, 250], fill=(138, 43, 226, 255), outline=(255, 255, 255, 255), width=5)
-        draw.text((120, 110), "A", fill=(255, 255, 255, 255), font_size=80)
+        draw.text((120, 110), "V", fill=(255, 255, 255, 255), font_size=80)
         img.save(dummy_logo)
         
     # Generate Slideshow Preview
@@ -691,7 +938,7 @@ def generate_default_previews(templates_dir, assets_dir):
             print(f"Error generating slideshow preview: {e}")
             
     # Generate Meme Preview (needs a base video clip)
-    base_video = os.path.join(assets_dir, "temp_base_video.mp4")
+    base_video = os.path.join(library_movies_dir, "temp_base_video.mp4")
     if not os.path.exists(base_video):
         # Create a simple rotating color block video
         def make_frame(t):
