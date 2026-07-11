@@ -102,17 +102,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 `;
             }
             
+            const previewUrl = tpl.preview_url || '/static/images/default_preview.png';
+            const isVideo = previewUrl.match(/\.(mp4|webm|mov|avi)$/i);
+            const previewMediaHtml = isVideo
+                ? `<video src="${previewUrl}" autoplay loop muted playsinline style="width:100%; height:100%; object-fit:cover;"></video>`
+                : `<img src="${previewUrl}" style="width:100%; height:100%; object-fit:cover;">`;
+            
             card.innerHTML = `
                 <div class="video-preview-wrapper">
-                    <video src="${tpl.preview_url}" autoplay loop muted playsinline></video>
+                    ${previewMediaHtml}
                 </div>
                 <div class="template-card-info">
                     <h3>${tpl.name}</h3>
                     <p>${tpl.description}</p>
-                    <button class="select-template-btn" data-id="${tpl.id}">
-                        使用此範本
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
-                    </button>
+                    <div style="display: flex; gap: 8px; margin-top: 0.5rem; width: 100%;">
+                        <button class="select-template-btn" data-id="${tpl.id}" style="flex: 2; margin: 0;">
+                            使用此範本
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+                        </button>
+                        <button class="change-preview-btn" data-id="${tpl.id}" style="flex: 1; background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.2); color: var(--accent-color); border-radius: 12px; padding: 0.6rem 0.8rem; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.2s ease;" title="設定自訂預覽圖片/影片">
+                            🖼️ 預覽
+                        </button>
+                    </div>
                     ${customActionsHtml}
                 </div>
             `;
@@ -120,6 +131,11 @@ document.addEventListener('DOMContentLoaded', () => {
             // Add click listener
             card.querySelector('.select-template-btn').addEventListener('click', () => {
                 selectTemplate(tpl.id);
+            });
+            
+            card.querySelector('.change-preview-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                openLibrarySelect(`template_preview:${tpl.id}`, false, 'image/*,video/*');
             });
             
             if (tpl.id.startsWith('custom_')) {
@@ -926,29 +942,53 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 scene.texts.forEach((text, tIdx) => {
                     textsListHtml += `
-                        <div class="scene-text-item">
-                            <input type="text" class="text-item-input" value="${text.content}" placeholder="輸入文字..." oninput="updateTextConfig(${sIdx}, ${tIdx}, 'content', this.value)">
+                        <div class="scene-text-item" style="display:flex; flex-direction:column; gap:0.8rem; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05); border-radius:10px; padding:1rem; margin-bottom:0.8rem;">
+                            <!-- Row 1: Text Input -->
+                            <div style="display:flex; gap:0.8rem; align-items:center; width:100%;">
+                                <div style="flex:1;">
+                                    <label style="display:block; font-size:0.75rem; color:var(--text-secondary); margin-bottom:0.3rem;">📝 文字疊加內容</label>
+                                    <input type="text" class="text-item-input" style="width:100%;" value="${text.content}" placeholder="輸入文字內容..." oninput="updateTextConfig(${sIdx}, ${tIdx}, 'content', this.value)">
+                                </div>
+                                <button type="button" class="delete-text-btn" style="align-self:flex-end; margin-bottom:0.4rem; padding: 0.4rem 0.8rem; font-size: 0.8rem;" onclick="deleteSceneText(${sIdx}, ${tIdx})">🗑️ 刪除</button>
+                            </div>
                             
-                            <select class="text-item-config" style="width:auto; flex:none;" onchange="updateTextConfig(${sIdx}, ${tIdx}, 'position', this.value)">
-                                <option value="top_left" ${text.position === 'top_left' ? 'selected' : ''}>↖️ 左上</option>
-                                <option value="top_center" ${text.position === 'top_center' || text.position === 'top' ? 'selected' : ''}>⬆️ 中上</option>
-                                <option value="top_right" ${text.position === 'top_right' ? 'selected' : ''}>↗️ 右上</option>
-                                <option value="center_left" ${text.position === 'center_left' ? 'selected' : ''}>⬅️ 左中</option>
-                                <option value="center" ${text.position === 'center' || !text.position ? 'selected' : ''}>↔️ 置中</option>
-                                <option value="center_right" ${text.position === 'center_right' ? 'selected' : ''}>➡️ 右中</option>
-                                <option value="bottom_left" ${text.position === 'bottom_left' ? 'selected' : ''}>↙️ 左下</option>
-                                <option value="bottom_center" ${text.position === 'bottom_center' || text.position === 'bottom' ? 'selected' : ''}>⬇️ 中下</option>
-                                <option value="bottom_right" ${text.position === 'bottom_right' ? 'selected' : ''}>↘️ 右下</option>
-                            </select>
-                            
-                            <input type="color" class="text-item-config" style="padding: 0.1rem; height: 32px; width: 45px; flex:none; cursor:pointer;" value="${text.color}" onchange="updateTextConfig(${sIdx}, ${tIdx}, 'color', this.value)">
-                            
-                            <input type="number" class="text-item-num" placeholder="字級" title="字體大小" value="${text.font_size}" oninput="updateTextConfig(${sIdx}, ${tIdx}, 'font_size', this.value)">
-                            
-                            <input type="number" step="0.1" class="text-item-num" placeholder="起(秒)" title="開始時間" value="${text.start_time}" oninput="updateTextConfig(${sIdx}, ${tIdx}, 'start_time', this.value)">
-                            <input type="number" step="0.1" class="text-item-num" placeholder="迄(秒)" title="結束時間" value="${text.end_time}" oninput="updateTextConfig(${sIdx}, ${tIdx}, 'end_time', this.value)">
-                            
-                            <button type="button" class="delete-text-btn" onclick="deleteSceneText(${sIdx}, ${tIdx})">&times;</button>
+                            <!-- Row 2: Parameters -->
+                            <div style="display:flex; gap:0.8rem; flex-wrap:wrap; align-items:center; width:100%;">
+                                <div style="flex:1.5; min-width:100px;">
+                                    <label style="display:block; font-size:0.75rem; color:var(--text-secondary); margin-bottom:0.3rem;">🧭 對齊位置</label>
+                                    <select class="text-item-config" style="width:100%;" onchange="updateTextConfig(${sIdx}, ${tIdx}, 'position', this.value)">
+                                        <option value="top_left" ${text.position === 'top_left' ? 'selected' : ''}>↖️ 左上</option>
+                                        <option value="top_center" ${text.position === 'top_center' || text.position === 'top' ? 'selected' : ''}>⬆️ 中上</option>
+                                        <option value="top_right" ${text.position === 'top_right' ? 'selected' : ''}>↗️ 右上</option>
+                                        <option value="center_left" ${text.position === 'center_left' ? 'selected' : ''}>⬅️ 左中</option>
+                                        <option value="center" ${text.position === 'center' || !text.position ? 'selected' : ''}>↔️ 置中</option>
+                                        <option value="center_right" ${text.position === 'center_right' ? 'selected' : ''}>➡️ 右中</option>
+                                        <option value="bottom_left" ${text.position === 'bottom_left' ? 'selected' : ''}>↙️ 左下</option>
+                                        <option value="bottom_center" ${text.position === 'bottom_center' || text.position === 'bottom' ? 'selected' : ''}>⬇️ 中下</option>
+                                        <option value="bottom_right" ${text.position === 'bottom_right' ? 'selected' : ''}>↘️ 右下</option>
+                                    </select>
+                                </div>
+                                
+                                <div style="width:60px; flex:none;">
+                                    <label style="display:block; font-size:0.75rem; color:var(--text-secondary); margin-bottom:0.3rem;">🎨 顏色</label>
+                                    <input type="color" style="padding:0.1rem; height:35px; width:100%; cursor:pointer; background:rgba(0,0,0,0.3); border:1px solid rgba(255, 255, 255, 0.08); border-radius:6px;" value="${text.color}" onchange="updateTextConfig(${sIdx}, ${tIdx}, 'color', this.value)">
+                                </div>
+                                
+                                <div style="width:70px; flex:none;">
+                                    <label style="display:block; font-size:0.75rem; color:var(--text-secondary); margin-bottom:0.3rem;">📏 字級</label>
+                                    <input type="number" class="text-item-num" style="width:100%;" placeholder="字體大小" value="${text.font_size}" oninput="updateTextConfig(${sIdx}, ${tIdx}, 'font_size', this.value)">
+                                </div>
+                                
+                                <div style="width:85px; flex:none;">
+                                    <label style="display:block; font-size:0.75rem; color:var(--text-secondary); margin-bottom:0.3rem;">⏱️ 起點(秒)</label>
+                                    <input type="number" step="0.1" class="text-item-num" style="width:100%;" placeholder="開始時間" value="${text.start_time}" oninput="updateTextConfig(${sIdx}, ${tIdx}, 'start_time', this.value)">
+                                </div>
+                                
+                                <div style="width:85px; flex:none;">
+                                    <label style="display:block; font-size:0.75rem; color:var(--text-secondary); margin-bottom:0.3rem;">⏱️ 終點(秒)</label>
+                                    <input type="number" step="0.1" class="text-item-num" style="width:100%;" placeholder="結束時間" value="${text.end_time}" oninput="updateTextConfig(${sIdx}, ${tIdx}, 'end_time', this.value)">
+                                </div>
+                            </div>
                         </div>
                     `;
                 });
@@ -1357,11 +1397,17 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Filter assets by accept type
             let filtered = [];
-            if (acceptType.includes('image')) {
+            const filterImages = acceptType.includes('image');
+            const filterVideos = acceptType.includes('video');
+            const filterAudios = acceptType.includes('audio');
+            
+            if (filterImages && filterVideos) {
+                filtered = (data.assets || []).filter(item => item.type === 'image' || item.type === 'video');
+            } else if (filterImages) {
                 filtered = (data.assets || []).filter(item => item.type === 'image');
-            } else if (acceptType.includes('video')) {
+            } else if (filterVideos) {
                 filtered = (data.assets || []).filter(item => item.type === 'video');
-            } else if (acceptType.includes('audio')) {
+            } else if (filterAudios) {
                 filtered = (data.assets || []).filter(item => item.type === 'audio');
             } else {
                 filtered = data.assets || [];
@@ -1429,6 +1475,40 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         const fieldName = currentSelectField;
+        
+        if (fieldName.startsWith('template_preview:')) {
+            const templateId = fieldName.split('template_preview:')[1];
+            const filename = selectedLibraryItems[0];
+            
+            function getFileType(filename) {
+                const ext = filename.split('.').pop().toLowerCase();
+                if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) return 'image';
+                if (['mp4', 'mov', 'avi', 'mkv', 'webm'].includes(ext)) return 'video';
+                return 'image';
+            }
+            
+            const type = getFileType(filename);
+            const url = `/library/${type === 'image' ? 'photos' : 'movies'}/${filename}`;
+            
+            fetch(`/api/templates/${templateId}/preview`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ preview_url: url })
+            })
+            .then(res => {
+                if (res.ok) {
+                    loadTemplates();
+                    closeLibrarySelectModal();
+                } else {
+                    alert('更新預覽圖失敗');
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert('更新預覽圖出錯: ' + err.message);
+            });
+            return;
+        }
         
         if (fieldName.startsWith('effect_')) {
             const displayInput = document.getElementById(fieldName);

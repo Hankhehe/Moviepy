@@ -104,14 +104,6 @@
             "url": "/library/music/Velocity_Unlocked.mp3",
             "uploaded_at": "2026-07-11 10:37:33"
         },
-        "default_logo.png": {
-            "filename": "default_logo.png",
-            "name": "系統預設 Logo 圖片",
-            "memo": "系統預設示範標誌圖片",
-            "type": "image",
-            "url": "/library/photos/default_logo.png",
-            "uploaded_at": "2026-07-11 10:56:17"
-        },
         "7bb70e42-0aea-44ae-8afb-a38a4412ae0a_scene_0_file_c4400d.jpg": {
             "filename": "7bb70e42-0aea-44ae-8afb-a38a4412ae0a_scene_0_file_c4400d.jpg",
             "name": "PXL_20260613_021449147.MP.jpg",
@@ -215,7 +207,61 @@
             ],
             "created_at": "2026-07-11 23:48:35",
             "updated_at": "2026-07-11 23:48:35"
+        },
+        "custom_fcf7f4d5": {
+            "id": "custom_fcf7f4d5",
+            "name": "測試影音與可選文字範本",
+            "description": "測試聲音靜音、調整音量，以及文字啟用與否的範本",
+            "aspect_ratio": "9:16",
+            "transition_effect": "none",
+            "scenes": [
+                {
+                    "duration": 3.0,
+                    "visual_type": "user_video",
+                    "zoom_direction": "in",
+                    "color": "#000000",
+                    "audio_option": "mute",
+                    "audio_volume": 1.0,
+                    "enable_text": true,
+                    "asset_field": "scene_0_file",
+                    "texts": [
+                        {
+                            "content": "這是啟用文字的靜音場景",
+                            "position": "center",
+                            "color": "#ffffff",
+                            "font_size": 40,
+                            "start_time": 0.0,
+                            "end_time": 3.0
+                        }
+                    ]
+                },
+                {
+                    "duration": 3.0,
+                    "visual_type": "user_video",
+                    "zoom_direction": "in",
+                    "color": "#000000",
+                    "audio_option": "volume",
+                    "audio_volume": 0.5,
+                    "enable_text": false,
+                    "asset_field": "scene_1_file",
+                    "texts": [
+                        {
+                            "content": "這是停用文字的半音量場景",
+                            "position": "center",
+                            "color": "#ff0000",
+                            "font_size": 40,
+                            "start_time": 0.0,
+                            "end_time": 3.0
+                        }
+                    ]
+                }
+            ],
+            "created_at": "2026-07-12 01:22:07",
+            "updated_at": "2026-07-12 01:22:07"
         }
     },
-    "system_initialized": true
+    "system_initialized": true,
+    "template_previews": {
+        "slideshow": "/library/photos/9ebf1c9c-42e0-4d0b-9034-ba11311f0422_images_1_daa87f.jpg"
+    }
 }

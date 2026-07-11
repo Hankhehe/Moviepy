@@ -1083,137 +1083,39 @@ def process_media_tool(input_file_path: str, action: str, library_dir: str, load
         raise ValueError(f"未知的處理動作: {action}")
 
 
-def generate_default_previews(templates_dir, library_photos_dir, library_music_dir):
-    """Automatically pre-generate preview videos for the templates using programmatically generated assets."""
-    os.makedirs(templates_dir, exist_ok=True)
-    os.makedirs(library_photos_dir, exist_ok=True)
-    os.makedirs(library_music_dir, exist_ok=True)
-    
-    library_dir = os.path.dirname(library_photos_dir)
-    library_movies_dir = os.path.join(library_dir, "movies")
-    os.makedirs(library_movies_dir, exist_ok=True)
-    
-    slideshow_preview = os.path.join(templates_dir, "slideshow_preview.mp4")
-    meme_preview = os.path.join(templates_dir, "meme_preview.mp4")
-    intro_preview = os.path.join(templates_dir, "intro_preview.mp4")
-    promo_preview = os.path.join(templates_dir, "promo_preview.mp4")
-    
-    # 1. Write a dummy beep sound to library/music for intro / slideshow background
-    beep_path = os.path.join(library_music_dir, "default_audio.mp3")
-    if not os.path.exists(beep_path):
-        # Generate simple sound file using moviepy synthesized tone
-        def make_tone(t):
-            return np.sin(2 * np.pi * 330 * t) + np.sin(2 * np.pi * 440 * t)
-        
-        tone = AudioClip(make_tone, duration=15, fps=44100)
-        tone.write_audiofile(beep_path, fps=44100, logger=None)
-        tone.close()
-        
-    # 2. Write dummy images to generate preview
-    dummy_imgs = []
-    colors = [(220, 50, 50), (50, 220, 50), (50, 50, 220)]
-    for idx, col in enumerate(colors):
-        path = os.path.join(library_photos_dir, f"temp_slide_{idx}.png")
-        img = Image.new("RGB", (1280, 720), col)
-        draw = ImageDraw.Draw(img)
-        draw.text((640 - 50, 360 - 20), f"Sample Slide {idx+1}", fill=(255,255,255))
-        img.save(path)
-        dummy_imgs.append(path)
-        
-    dummy_logo = os.path.join(library_photos_dir, "default_logo.png")
-    if not os.path.exists(dummy_logo):
-        img = Image.new("RGBA", (300, 300), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(img)
-        draw.ellipse([50, 50, 250, 250], fill=(138, 43, 226, 255), outline=(255, 255, 255, 255), width=5)
-        draw.text((120, 110), "V", fill=(255, 255, 255, 255), font_size=80)
-        img.save(dummy_logo)
-        
-    # Generate Slideshow Preview
-    if not os.path.exists(slideshow_preview):
-        print("Generating slideshow preview video...")
-        try:
-            generate_slideshow_video(
-                "init_slideshow", 
-                dummy_imgs, 
-                "時尚影集範本預覽", 
-                beep_path, 
-                slideshow_preview, 
-                lambda *args: None
-            )
-        except Exception as e:
-            print(f"Error generating slideshow preview: {e}")
-            
-    # Generate Meme Preview (needs a base video clip)
-    base_video = os.path.join(library_movies_dir, "temp_base_video.mp4")
-    if not os.path.exists(base_video):
-        # Create a simple rotating color block video
-        def make_frame(t):
-            color = int(127 + 127 * np.sin(t * np.pi))
-            img = Image.new("RGB", (1280, 720), (color, 100, 200 - color))
-            draw = ImageDraw.Draw(img)
-            draw.rectangle([540, 260, 740, 460], fill=(255, 255, 255))
-            return np.array(img)
-            
-        from moviepy import VideoClip
-        vc = VideoClip(make_frame, duration=5.0)
-        vc.write_videofile(base_video, fps=24, codec="libx264", logger=None)
-        vc.close()
-        
-    if not os.path.exists(meme_preview):
-        print("Generating meme preview video...")
-        try:
-            generate_meme_video(
-                "init_meme", 
-                base_video, 
-                "WHEN THE CODE COMPILES", 
-                "ON THE FIRST TRY", 
-                meme_preview, 
-                lambda *args: None
-            )
-        except Exception as e:
-            print(f"Error generating meme preview: {e}")
-            
-    # Generate Logo Intro Preview
-    if not os.path.exists(intro_preview):
-        print("Generating logo intro preview video...")
-        try:
-            generate_logo_intro_video(
-                "init_intro", 
-                dummy_logo, 
-                "Antigravity Studio", 
-                "Create without boundaries", 
-                beep_path, 
-                intro_preview, 
-                lambda *args: None
-            )
-        except Exception as e:
-            print(f"Error generating intro preview: {e}")
-            
-    # Generate Product Promo Preview
-    if not os.path.exists(promo_preview):
-        print("Generating product promo preview video...")
-        try:
-            promo_imgs = dummy_imgs * 2
-            generate_product_promo_video(
-                "init_promo", 
-                promo_imgs, 
-                "Aether Studio", 
-                "北歐風極簡藍牙喇叭", 
-                ["劇院級立體環繞音效", "24小時長效續航力", "極簡工藝 美學設計"], 
-                beep_path, 
-                promo_preview, 
-                lambda *args: None
-            )
-        except Exception as e:
-            print(f"Error generating promo preview: {e}")
-            
-    # Clean up temp slides/base video
-    for p in dummy_imgs + [base_video]:
-        if os.path.exists(p):
+def delete_default_previews(templates_dir, library_photos_dir, library_music_dir):
+    """Deletes the old default ugly preview videos from the system, while ensuring system assets exist."""
+    # Delete MP4s
+    for f in ["slideshow_preview.mp4", "meme_preview.mp4", "intro_preview.mp4", "promo_preview.mp4"]:
+        path = os.path.join(templates_dir, f)
+        if os.path.exists(path):
             try:
-                os.remove(p)
+                os.remove(path)
             except Exception:
                 pass
+
+    # Ensure system assets exist
+    beep_path = os.path.join(library_music_dir, "default_audio.mp3")
+    if not os.path.exists(beep_path):
+        try:
+            def make_tone(t):
+                return np.sin(2 * np.pi * 330 * t) + np.sin(2 * np.pi * 440 * t)
+            tone = AudioClip(make_tone, duration=15, fps=44100)
+            tone.write_audiofile(beep_path, fps=44100, logger=None)
+            tone.close()
+        except Exception as e:
+            print(f"Error generating default audio: {e}")
+
+    dummy_logo = os.path.join(library_photos_dir, "default_logo.png")
+    if not os.path.exists(dummy_logo):
+        try:
+            img = Image.new("RGBA", (300, 300), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(img)
+            draw.ellipse([50, 50, 250, 250], fill=(138, 43, 226, 255), outline=(255, 255, 255, 255), width=5)
+            draw.text((120, 110), "V", fill=(255, 255, 255, 255), font_size=80)
+            img.save(dummy_logo)
+        except Exception as e:
+            print(f"Error generating default logo: {e}")
 
 
 def generate_blend_effect_video(task_id, img1_path, img2_path, duration, fade_duration, output_path, progress_callback):

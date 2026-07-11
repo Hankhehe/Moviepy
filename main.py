@@ -191,6 +191,62 @@ def download_audio_asset(url: str, dest_path: str):
         print(f"Failed to download {url}: {e}")
 
 
+def generate_default_fallback_image():
+    image_dir = os.path.join(STATIC_DIR, "images")
+    os.makedirs(image_dir, exist_ok=True)
+    img_path = os.path.join(image_dir, "default_preview.png")
+    
+    if not os.path.exists(img_path):
+        try:
+            from PIL import Image, ImageDraw, ImageFont
+            # Create a nice dark gradient placeholder
+            img = Image.new("RGB", (1280, 720), (20, 24, 33))
+            draw = ImageDraw.Draw(img)
+            
+            # Glowing border
+            draw.rectangle([20, 20, 1260, 700], outline=(139, 92, 246), width=4)
+            
+            # Search for available bold system fonts
+            font = None
+            font_names = []
+            if sys.platform.startswith("win"):
+                font_names = ["msjhbd.ttc", "msjh.ttc", "arialbd.ttf", "arial.ttf"]
+            elif sys.platform.startswith("darwin"):
+                font_names = ["/System/Library/Fonts/PingFang.ttc", "/Library/Fonts/Arial.ttf"]
+            else:
+                font_names = ["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"]
+                
+            for fn in font_names:
+                try:
+                    font = ImageFont.truetype(fn, 44)
+                    break
+                except Exception:
+                    continue
+            if not font:
+                font = ImageFont.load_default()
+                
+            # Draw manually centered lines to support all Pillow versions without anchor="mm"
+            lines = ["✨ 點擊「🖼️ 預覽」按鈕", "自訂媒體庫素材為範本封面"]
+            y_start = 280
+            for line in lines:
+                try:
+                    if hasattr(font, 'getbbox'):
+                        bbox = font.getbbox(line)
+                        w = bbox[2] - bbox[0]
+                    else:
+                        w, _ = font.getsize(line)
+                except Exception:
+                    w = len(line) * 22
+                x = (1280 - w) // 2
+                draw.text((x, y_start), line, fill=(226, 232, 240), font=font)
+                y_start += 70
+                
+            img.save(img_path)
+            print("Successfully generated default fallback preview image.")
+        except Exception as e:
+            print(f"Failed to generate default fallback image: {e}")
+
+
 # Startup events
 @app.on_event("startup")
 async def startup_event():
@@ -236,11 +292,12 @@ async def startup_event():
                 except Exception as e:
                     print(f"Failed to generate synth {filename}: {e}")
                 
-    # 3. Initialize templates preview videos
+    # 3. Initialize templates preview videos (Remove ugly MP4s and generate default placeholder image)
     try:
-        video_processor.generate_default_previews(TEMPLATES_DIR, LIBRARY_PHOTOS_DIR, LIBRARY_MUSIC_DIR)
+        video_processor.delete_default_previews(TEMPLATES_DIR, LIBRARY_PHOTOS_DIR, LIBRARY_MUSIC_DIR)
+        generate_default_fallback_image()
     except Exception as e:
-        print(f"Error generating preview templates: {e}")
+        print(f"Error handling default previews: {e}")
 
     # 4. Run library directory migration, file classification, and database registration
     print("Running library migration and database registration...")
@@ -402,14 +459,28 @@ async def get_templates():
             "conditional": "music=custom"
         })
         
+        custom_previews = db.get("template_previews", {})
+        tpl_preview = custom_previews.get(t_id, "/static/images/default_preview.png")
+        
         templates.append({
             "id": t_id,
             "name": f"✨ [自訂] {ct.get('name')}",
             "description": f"{ct.get('description', '')} (比例: {ct.get('aspect_ratio', '9:16')}, 共 {len(ct.get('scenes', []))} 個場景)",
-            "preview_url": "/static/templates/promo_preview.mp4",
+            "preview_url": tpl_preview,
             "fields": fields
         })
         
+    # Also override standard templates previews if customized, or use fallback placeholder
+    custom_previews = db.get("template_previews", {})
+    for tpl in templates:
+        t_id = tpl["id"]
+        if t_id.startswith("custom_"):
+            continue
+        if t_id in custom_previews:
+            tpl["preview_url"] = custom_previews[t_id]
+        else:
+            tpl["preview_url"] = "/static/images/default_preview.png"
+            
     return templates
 
 def get_audio_path(selection: str, custom_file_path: str = None) -> str:
@@ -801,6 +872,19 @@ async def get_custom_template(template_id: str):
     if not custom_tpl:
         raise HTTPException(status_code=404, detail="Custom template not found")
     return custom_tpl
+
+class SetPreviewRequest(BaseModel):
+    preview_url: str
+
+@app.post("/api/templates/{template_id}/preview")
+async def set_template_preview(template_id: str, req: SetPreviewRequest):
+    db = load_db()
+    if "template_previews" not in db:
+        db["template_previews"] = {}
+    db["template_previews"][template_id] = req.preview_url
+    save_db(db)
+    return {"status": "success"}
+
 
 @app.delete("/api/templates/custom/{template_id}")
 async def delete_custom_template(template_id: str):
