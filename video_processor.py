@@ -1352,3 +1352,135 @@ def generate_grid_layout_video(task_id, media_paths, cols, rows, duration, gap, 
         clip.close()
         
     progress_callback(task_id, 100, "宮格影片合成完成！")
+
+
+def generate_pip_video(
+    task_id,
+    main_video_path,
+    sub_video_path,
+    main_audio_option,
+    main_audio_volume,
+    pip_audio_option,
+    pip_audio_volume,
+    pip_position,
+    pip_scale,
+    text_content,
+    text_position,
+    text_color,
+    text_font_size,
+    output_path,
+    progress_callback
+):
+    progress_callback(task_id, 10, "正在載入主畫面與子畫面影片...")
+    
+    from moviepy import VideoFileClip, CompositeVideoClip
+    from moviepy.audio.AudioClip import CompositeAudioClip
+    import os
+    
+    main_clip = VideoFileClip(main_video_path)
+    sub_clip = VideoFileClip(sub_video_path)
+    
+    duration = main_clip.duration
+    main_w, main_h = main_clip.size
+    
+    progress_callback(task_id, 30, "正在處理子畫面大小與位置...")
+    
+    # Scale PIP sub-video keeping aspect ratio
+    scale_factor = float(pip_scale) / 100.0
+    sub_w = int(main_w * scale_factor)
+    sub_h = int(sub_clip.h * (sub_w / sub_clip.w))
+    
+    sub_clip_resized = sub_clip.resized((sub_w, sub_h))
+    # Limit duration so it disappears after finishing
+    sub_clip_resized = sub_clip_resized.with_duration(min(sub_clip.duration, duration))
+    
+    # 9-grid alignment coordinates with 5% safety margin
+    margin_x = int(main_w * 0.05)
+    margin_y = int(main_h * 0.05)
+    
+    x, y = margin_x, margin_y  # fallback default: top_left
+    
+    if pip_position == "top_left":
+        x, y = margin_x, margin_y
+    elif pip_position == "top_center":
+        x, y = (main_w - sub_w) // 2, margin_y
+    elif pip_position == "top_right":
+        x, y = main_w - sub_w - margin_x, margin_y
+    elif pip_position == "center_left":
+        x, y = margin_x, (main_h - sub_h) // 2
+    elif pip_position == "center":
+        x, y = (main_w - sub_w) // 2, (main_h - sub_h) // 2
+    elif pip_position == "center_right":
+        x, y = main_w - sub_w - margin_x, (main_h - sub_h) // 2
+    elif pip_position == "bottom_left":
+        x, y = margin_x, main_h - sub_h - margin_y
+    elif pip_position == "bottom_center":
+        x, y = (main_w - sub_w) // 2, main_h - sub_h - margin_y
+    elif pip_position == "bottom_right":
+        x, y = main_w - sub_w - margin_x, main_h - sub_h - margin_y
+        
+    sub_clip_positioned = sub_clip_resized.with_position((x, y))
+    
+    progress_callback(task_id, 50, "正在處理解析音量與音軌混合...")
+    
+    # Audio processing
+    main_audio = None
+    if main_clip.audio is not None:
+        if main_audio_option != "mute":
+            main_audio = main_clip.audio.with_volume_scaled(float(main_audio_volume) / 100.0)
+            
+    sub_audio = None
+    if sub_clip.audio is not None:
+        if pip_audio_option != "mute":
+            sub_audio = sub_clip.audio.with_volume_scaled(float(pip_audio_volume) / 100.0)
+            # Clip sub-audio to match sub-clip duration
+            sub_audio = sub_audio.subclipped(0, min(sub_clip.duration, duration))
+            
+    # Assemble silent video composite first
+    main_clip_silent = main_clip.without_audio()
+    sub_clip_silent = sub_clip_positioned.without_audio()
+    
+    video_layers = [main_clip_silent, sub_clip_silent]
+    
+    # Text overlay layer
+    if text_content:
+        progress_callback(task_id, 65, "正在新增文字疊加軌...")
+        text_item = {
+            "content": text_content,
+            "position": text_position,
+            "color": text_color or "#ffffff",
+            "font_size": int(text_font_size or 40)
+        }
+        text_clip = create_custom_text_overlay([text_item], main_w, main_h, duration)
+        video_layers.append(text_clip)
+        
+    final_video = CompositeVideoClip(video_layers, size=(main_w, main_h)).with_duration(duration)
+    
+    audio_tracks = []
+    if main_audio:
+        audio_tracks.append(main_audio)
+    if sub_audio:
+        audio_tracks.append(sub_audio)
+        
+    if audio_tracks:
+        composite_audio = CompositeAudioClip(audio_tracks).with_duration(duration)
+        final_video = final_video.with_audio(composite_audio)
+        
+    progress_callback(task_id, 75, "正在輸出合成影片，請稍候...")
+    
+    # Custom logger for progress update
+    logger = CustomMoviePyLogger(task_id, progress_callback)
+    
+    final_video.write_videofile(
+        output_path,
+        fps=24,
+        codec="libx264",
+        audio_codec="aac",
+        logger=logger
+    )
+    
+    final_video.close()
+    main_clip.close()
+    sub_clip.close()
+    
+    progress_callback(task_id, 100, "子母畫面影片合成完成！")

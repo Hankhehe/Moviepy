@@ -1862,9 +1862,147 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 </div>
             `;
+        } else if (toolName === 'pip_layout') {
+            html = `
+                <div class="form-group" id="group_effect_main_video">
+                    <label>主畫面影片 (Main Video) *</label>
+                    <div style="display:flex; gap:0.5rem; align-items:center;">
+                        <input type="text" readonly id="effect_main_video" required placeholder="點擊右側按鈕從媒體庫選取" class="form-input">
+                        <button type="button" class="select-library-btn" style="position:relative; z-index:10; white-space:nowrap; background:var(--gradient-accent); border:none; color:white; padding:0.6rem 0.8rem; border-radius:8px; font-size:0.8rem; cursor:pointer;" onclick="openLibrarySelect('effect_main_video', false, 'video/*')">📂 選擇</button>
+                    </div>
+                    <input type="hidden" id="hidden_effect_main_video">
+                    <div class="file-preview-container" id="preview_effect_main_video" style="margin-top:0.5rem;"></div>
+                </div>
+
+                <div class="form-group">
+                    <label for="effect_main_audio_option">主畫面聲音設定</label>
+                    <select id="effect_main_audio_option" class="form-select" onchange="toggleEffectVolumeSlider('main')">
+                        <option value="keep" selected>🔊 保持影片原音</option>
+                        <option value="mute">🔇 靜音</option>
+                        <option value="volume">🎚️ 調整音量大小</option>
+                    </select>
+                </div>
+
+                <div class="form-group" id="group_effect_main_audio_volume" style="display:none;">
+                    <label for="effect_main_audio_volume">主畫面音量</label>
+                    <div style="display:flex; align-items:center; gap:1rem;">
+                        <input type="range" id="effect_main_audio_volume" min="0" max="200" step="5" value="100" class="form-input" style="flex:1; height:6px; cursor:pointer; padding:0;">
+                        <span id="label_effect_main_audio_volume" style="font-size:0.85rem; color:var(--accent-color); font-weight:700; width:45px; text-align:right;">100%</span>
+                    </div>
+                </div>
+                
+                <div class="form-group" id="group_effect_sub_video">
+                    <label>子畫面影片 (PIP Sub-Video) *</label>
+                    <div style="display:flex; gap:0.5rem; align-items:center;">
+                        <input type="text" readonly id="effect_sub_video" required placeholder="點擊右側按鈕從媒體庫選取" class="form-input">
+                        <button type="button" class="select-library-btn" style="position:relative; z-index:10; white-space:nowrap; background:var(--gradient-accent); border:none; color:white; padding:0.6rem 0.8rem; border-radius:8px; font-size:0.8rem; cursor:pointer;" onclick="openLibrarySelect('effect_sub_video', false, 'video/*')">📂 選擇</button>
+                    </div>
+                    <input type="hidden" id="hidden_effect_sub_video">
+                    <div class="file-preview-container" id="preview_effect_sub_video" style="margin-top:0.5rem;"></div>
+                </div>
+
+                <div class="form-group">
+                    <label for="effect_pip_audio_option">子畫面聲音設定</label>
+                    <select id="effect_pip_audio_option" class="form-select" onchange="toggleEffectVolumeSlider('pip')">
+                        <option value="keep" selected>🔊 保持影片原音</option>
+                        <option value="mute">🔇 靜音</option>
+                        <option value="volume">🎚️ 調整音量大小</option>
+                    </select>
+                </div>
+
+                <div class="form-group" id="group_effect_pip_audio_volume" style="display:none;">
+                    <label for="effect_pip_audio_volume">子畫面音量</label>
+                    <div style="display:flex; align-items:center; gap:1rem;">
+                        <input type="range" id="effect_pip_audio_volume" min="0" max="200" step="5" value="100" class="form-input" style="flex:1; height:6px; cursor:pointer; padding:0;">
+                        <span id="label_effect_pip_audio_volume" style="font-size:0.85rem; color:var(--accent-color); font-weight:700; width:45px; text-align:right;">100%</span>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="effect_pip_scale">子畫面大小比例 (佔主畫面寬度)</label>
+                    <select id="effect_pip_scale" class="form-select">
+                        <option value="20">20%</option>
+                        <option value="30" selected>30% (推薦)</option>
+                        <option value="40">40%</option>
+                        <option value="50">50%</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="effect_pip_position">子畫面九宮格位置</label>
+                    <select id="effect_pip_position" class="form-select">
+                        <option value="top_left" selected>↖️ 左上</option>
+                        <option value="top_center">⬆️ 中上</option>
+                        <option value="top_right">↗️ 右上</option>
+                        <option value="center_left">⬅️ 左中</option>
+                        <option value="center">↔️ 置中</option>
+                        <option value="center_right">➡️ 右中</option>
+                        <option value="bottom_left">↙️ 左下</option>
+                        <option value="bottom_center">⬇️ 中下</option>
+                        <option value="bottom_right">↘️ 右下</option>
+                    </select>
+                </div>
+
+                <hr style="border:0; border-top:1px solid rgba(255,255,255,0.1); margin:1.5rem 0;">
+
+                <div class="form-group">
+                    <label for="effect_text_content">添加疊加文字 (可留空)</label>
+                    <input type="text" id="effect_text_content" placeholder="輸入文字內容疊加至畫面上" class="form-input">
+                </div>
+
+                <div class="form-group">
+                    <label for="effect_text_position">文字對齊位置</label>
+                    <select id="effect_text_position" class="form-select">
+                        <option value="top_left">↖️ 左上</option>
+                        <option value="top_center" selected>⬆️ 中上 (推薦)</option>
+                        <option value="top_right">↗️ 右上</option>
+                        <option value="center_left">⬅️ 左中</option>
+                        <option value="center">↔️ 置中</option>
+                        <option value="center_right">➡️ 右中</option>
+                        <option value="bottom_left">↙️ 左下</option>
+                        <option value="bottom_center">⬇️ 中下</option>
+                        <option value="bottom_right">↘️ 右下</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="effect_text_color">文字顏色</label>
+                    <input type="color" id="effect_text_color" value="#ffffff" class="form-input" style="height:38px; padding:0 4px; cursor:pointer;">
+                </div>
+
+                <div class="form-group">
+                    <label for="effect_text_font_size">文字大小 (px)</label>
+                    <input type="number" id="effect_text_font_size" value="40" min="12" max="150" class="form-input">
+                </div>
+            `;
+            
+            setTimeout(() => {
+                const mainVol = document.getElementById('effect_main_audio_volume');
+                const mainLabel = document.getElementById('label_effect_main_audio_volume');
+                if (mainVol && mainLabel) {
+                    mainVol.addEventListener('input', (e) => {
+                        mainLabel.innerText = `${e.target.value}%`;
+                    });
+                }
+                const pipVol = document.getElementById('effect_pip_audio_volume');
+                const pipLabel = document.getElementById('label_effect_pip_audio_volume');
+                if (pipVol && pipLabel) {
+                    pipVol.addEventListener('input', (e) => {
+                        pipLabel.innerText = `${e.target.value}%`;
+                    });
+                }
+            }, 50);
         }
 
         fieldsContainer.innerHTML = html;
+    };
+
+    window.toggleEffectVolumeSlider = function(prefix) {
+        const optionVal = document.getElementById(`effect_${prefix}_audio_option`).value;
+        const sliderGroup = document.getElementById(`group_effect_${prefix}_audio_volume`);
+        if (sliderGroup) {
+            sliderGroup.style.display = optionVal === 'volume' ? 'block' : 'none';
+        }
     };
 
     function resetEffectStatus() {
@@ -1993,6 +2131,40 @@ document.addEventListener('DOMContentLoaded', () => {
 
             params.video = video;
             params.audio_action = audioAction;
+        } else if (tool === 'pip_layout') {
+            const mainVideo = document.getElementById('hidden_effect_main_video').value;
+            const subVideo = document.getElementById('hidden_effect_sub_video').value;
+            
+            const mainAudioOption = document.getElementById('effect_main_audio_option').value;
+            const mainAudioVolume = document.getElementById('effect_main_audio_volume').value;
+            const pipAudioOption = document.getElementById('effect_pip_audio_option').value;
+            const pipAudioVolume = document.getElementById('effect_pip_audio_volume').value;
+            
+            const pipScale = document.getElementById('effect_pip_scale').value;
+            const pipPosition = document.getElementById('effect_pip_position').value;
+            
+            const textContent = document.getElementById('effect_text_content').value;
+            const textPosition = document.getElementById('effect_text_position').value;
+            const textColor = document.getElementById('effect_text_color').value;
+            const textFontSize = document.getElementById('effect_text_font_size').value;
+
+            if (!mainVideo || !subVideo) {
+                alert('請選擇主畫面影片與子畫面影片素材！');
+                return;
+            }
+
+            params.main_video = mainVideo;
+            params.sub_video = subVideo;
+            params.main_audio_option = mainAudioOption;
+            params.main_audio_volume = mainAudioVolume;
+            params.pip_audio_option = pipAudioOption;
+            params.pip_audio_volume = pipAudioVolume;
+            params.pip_scale = pipScale;
+            params.pip_position = pipPosition;
+            params.text_content = textContent;
+            params.text_position = textPosition;
+            params.text_color = textColor;
+            params.text_font_size = textFontSize;
         }
 
         document.getElementById('effectPlaceholder').style.display = 'none';

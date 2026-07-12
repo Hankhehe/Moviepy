@@ -1058,6 +1058,31 @@ def run_effect_render_in_thread(task_id: str, tool: str, params: Dict[str, Any])
             )
             
             update_task_progress(task_id, 100, "處理完成！您現在可以選擇將其儲存至媒體中心。")
+        elif tool == "pip_layout":
+            main_video_path = params.get("main_video")
+            sub_video_path = params.get("sub_video")
+            
+            main_audio_option = params.get("main_audio_option", "keep")
+            main_audio_volume = float(params.get("main_audio_volume", 100))
+            pip_audio_option = params.get("pip_audio_option", "keep")
+            pip_audio_volume = float(params.get("pip_audio_volume", 100))
+            
+            pip_position = params.get("pip_position", "top_left")
+            pip_scale = int(params.get("pip_scale", 30))
+            
+            text_content = params.get("text_content", "")
+            text_position = params.get("text_position", "center")
+            text_color = params.get("text_color", "#ffffff")
+            text_font_size = int(params.get("text_font_size", 40))
+            
+            video_processor.generate_pip_video(
+                task_id, main_video_path, sub_video_path,
+                main_audio_option, main_audio_volume,
+                pip_audio_option, pip_audio_volume,
+                pip_position, pip_scale,
+                text_content, text_position, text_color, text_font_size,
+                output_path, update_task_progress
+            )
         else:
             raise ValueError(f"Unknown effect tool type: {tool}")
             

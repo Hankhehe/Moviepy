@@ -143,6 +143,22 @@
             "type": "audio",
             "url": "/library/music/uploaded_456b3f5b_03245b.mp3",
             "uploaded_at": "2026-07-12 08:49:07"
+        },
+        "uploaded_e00f43f1_d23d8e.mp4": {
+            "filename": "uploaded_e00f43f1_d23d8e.mp4",
+            "name": "PXL_20260708_120023772.TS.mp4",
+            "memo": "手動上傳的素材",
+            "type": "video",
+            "url": "/library/movies/uploaded_e00f43f1_d23d8e.mp4",
+            "uploaded_at": "2026-07-12 19:04:38"
+        },
+        "effect_37cb35_output_c1125dc3-b751-4e89-9cb9-e5075657fbf0.mp4": {
+            "filename": "effect_37cb35_output_c1125dc3-b751-4e89-9cb9-e5075657fbf0.mp4",
+            "name": "特效成果_20260712",
+            "memo": "由特效工坊的「特效成果」工具生成。",
+            "type": "video",
+            "url": "/library/movies/effect_37cb35_output_c1125dc3-b751-4e89-9cb9-e5075657fbf0.mp4",
+            "uploaded_at": "2026-07-12 19:44:50"
         }
     },
     "videos": {
