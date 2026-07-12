@@ -135,32 +135,24 @@
             "type": "audio",
             "url": "/library/music/extracted_def359_7bb70e42-0aea-44ae-8afb-a38a4412ae0a_scene_1_file_42ab21.mp3",
             "uploaded_at": "2026-07-12 00:00:57"
+        },
+        "uploaded_456b3f5b_03245b.mp3": {
+            "filename": "uploaded_456b3f5b_03245b.mp3",
+            "name": "新聞旁白.mp3",
+            "memo": "手動上傳的素材",
+            "type": "audio",
+            "url": "/library/music/uploaded_456b3f5b_03245b.mp3",
+            "uploaded_at": "2026-07-12 08:49:07"
         }
     },
     "videos": {
-        "output_9ebf1c9c-42e0-4d0b-9034-ba11311f0422.mp4": {
-            "filename": "output_9ebf1c9c-42e0-4d0b-9034-ba11311f0422.mp4",
-            "name": "高質感商品宣傳短片 - 0711_0051",
-            "memo": "使用「高質感商品宣傳短片」範本於 2026-07-11 00:51:18 製作完成。",
-            "url": "/outputs/output_9ebf1c9c-42e0-4d0b-9034-ba11311f0422.mp4",
-            "template_id": "product_promo",
-            "created_at": "2026-07-11 00:51:18"
-        },
-        "output_929c3be2-5f46-4fd9-a028-322846f51919.mp4": {
-            "filename": "output_929c3be2-5f46-4fd9-a028-322846f51919.mp4",
-            "name": "未命名影片 - 0711_0953",
-            "memo": "使用「未命名影片」範本於 2026-07-11 09:53:11 製作完成。",
-            "url": "/outputs/output_929c3be2-5f46-4fd9-a028-322846f51919.mp4",
-            "template_id": "custom_de346caa",
-            "created_at": "2026-07-11 09:53:11"
-        },
-        "output_7bb70e42-0aea-44ae-8afb-a38a4412ae0a.mp4": {
-            "filename": "output_7bb70e42-0aea-44ae-8afb-a38a4412ae0a.mp4",
-            "name": "未命名影片 - 0711_1124",
-            "memo": "使用「未命名影片」範本於 2026-07-11 11:24:59 製作完成。",
-            "url": "/outputs/output_7bb70e42-0aea-44ae-8afb-a38a4412ae0a.mp4",
-            "template_id": "custom_de346caa",
-            "created_at": "2026-07-11 11:24:59"
+        "output_4f38570d-760b-48a7-95cd-e1b047e76c0a.mp4": {
+            "filename": "output_4f38570d-760b-48a7-95cd-e1b047e76c0a.mp4",
+            "name": "時尚相簿投影片 - 0712_0857",
+            "memo": "使用「時尚相簿投影片」範本於 2026-07-12 08:57:44 製作完成。",
+            "url": "/outputs/output_4f38570d-760b-48a7-95cd-e1b047e76c0a.mp4",
+            "template_id": "slideshow",
+            "created_at": "2026-07-12 08:57:44"
         }
     },
     "custom_templates": {

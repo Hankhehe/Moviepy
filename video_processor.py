@@ -169,19 +169,91 @@ def process_slideshow_image(img_path, width=1280, height=720):
         return bg.convert("RGB")
 
 
-def generate_slideshow_video(task_id, images_paths, title, bg_music_path, output_path, progress_callback):
+def mix_video_audio(final_video, bg_music=None, bg_music_volume=0.7, voiceover=None, voiceover_volume=1.0):
+    """
+    Composites background music and voiceover audio track over the video's original audio (if any),
+    supporting independent volume controls for both.
+    """
+    from moviepy.audio.AudioClip import CompositeAudioClip
+    from moviepy.audio.io.AudioFileClip import AudioFileClip
+    
+    audio_clips = []
+    
+    # 1. Capture original video audio if it exists
+    if final_video.audio is not None:
+        audio_clips.append(final_video.audio)
+        
+    # 2. Add Background Music
+    if bg_music and os.path.exists(bg_music):
+        try:
+            bg_clip = AudioFileClip(bg_music)
+            if bg_clip.duration < final_video.duration:
+                from moviepy.audio.fx.AudioLoop import AudioLoop
+                bg_clip = bg_clip.with_effects([AudioLoop(duration=final_video.duration)])
+            else:
+                bg_clip = bg_clip.subclipped(0, final_video.duration)
+                
+            from moviepy.audio.fx.AudioFadeOut import AudioFadeOut
+            bg_clip = bg_clip.with_effects([AudioFadeOut(1.5)])
+            bg_clip = bg_clip.with_volume_scaled(float(bg_music_volume))
+            audio_clips.append(bg_clip)
+        except Exception as e:
+            print(f"Error loading background music {bg_music}: {e}")
+            
+    # 3. Add Voiceover
+    if voiceover and os.path.exists(voiceover):
+        try:
+            vo_clip = AudioFileClip(voiceover)
+            if vo_clip.duration > final_video.duration:
+                vo_clip = vo_clip.subclipped(0, final_video.duration)
+            else:
+                vo_clip = vo_clip.with_duration(vo_clip.duration)
+                
+            from moviepy.audio.fx.AudioFadeOut import AudioFadeOut
+            vo_clip = vo_clip.with_effects([AudioFadeOut(1.5)])
+            vo_clip = vo_clip.with_volume_scaled(float(voiceover_volume))
+            audio_clips.append(vo_clip)
+        except Exception as e:
+            print(f"Error loading voiceover {voiceover}: {e}")
+            
+    if audio_clips:
+        composite_audio = CompositeAudioClip(audio_clips)
+        composite_audio = composite_audio.with_duration(final_video.duration)
+        final_video = final_video.with_audio(composite_audio)
+        
+    return final_video
+
+
+def generate_slideshow_video(task_id, images_paths, title, bg_music_path, bg_music_volume, voiceover_path, voiceover_volume, output_path, progress_callback):
     """Generate a slideshow from images with transitions, title overlay, and background music."""
     progress_callback(task_id, 10, "正在讀取並處理圖片...")
     
+    if not images_paths:
+        raise ValueError("沒有提供圖片素材！")
+        
     img_dur = 3.0
-    fade_dur = 0.5
-    clips = []
+    fade_dur = 1.0
     
-    for i, path in enumerate(images_paths):
-        img = process_slideshow_image(path)
-        clip = ImageClip(np.array(img)).with_duration(img_dur + fade_dur)
+    clips = []
+    for i, img_path in enumerate(images_paths):
+        # Read and scale image centered on canvas
+        processed_img = process_slideshow_image(img_path)
+        
+        temp_img_path = img_path + "_resized.png"
+        processed_img.save(temp_img_path)
+        
+        img_clip = ImageClip(temp_img_path).with_duration(img_dur + fade_dur)
+        
+        try: os.remove(temp_img_path)
+        except Exception: pass
+        
+        # Apply smooth zoom-in effect
+        clip = img_clip.resized(lambda t: 1.0 + (0.05 * t / (img_dur + fade_dur)))
+        
+        # Add crossfade transition (fade-in only, except first clip)
         if i > 0:
             clip = clip.with_effects([vfx.FadeIn(fade_dur)])
+            
         clip = clip.with_start(i * img_dur)
         clips.append(clip)
         
@@ -196,19 +268,9 @@ def generate_slideshow_video(task_id, images_paths, title, bg_music_path, output
         title_clip = title_clip.with_start(0.5).with_effects([vfx.FadeIn(0.5), vfx.FadeOut(0.5)])
         video = CompositeVideoClip([video, title_clip]).with_duration(total_dur)
         
-    # Background Music
-    if bg_music_path and os.path.exists(bg_music_path):
-        progress_callback(task_id, 45, "正在處理背景音樂...")
-        try:
-            audio = AudioFileClip(bg_music_path)
-            if audio.duration < total_dur:
-                audio = audio.with_effects([AudioLoop(duration=total_dur)])
-            else:
-                audio = audio.subclipped(0, total_dur)
-            audio = audio.with_effects([AudioFadeOut(1.0)])
-            video = video.with_audio(audio)
-        except Exception as e:
-            print(f"Error adding audio: {e}")
+    # Audio Mixing
+    progress_callback(task_id, 45, "正在進行混音處理...")
+    video = mix_video_audio(video, bg_music_path, bg_music_volume, voiceover_path, voiceover_volume)
             
     progress_callback(task_id, 60, "正在渲染影片並寫入檔案...")
     logger = CustomMoviePyLogger(task_id, progress_callback)
@@ -267,7 +329,7 @@ def create_meme_overlay(top_text, bottom_text, width=1280, height=720, duration=
     return clip
 
 
-def generate_meme_video(task_id, video_path, top_text, bottom_text, output_path, progress_callback):
+def generate_meme_video(task_id, video_path, top_text, bottom_text, bg_music, bg_music_volume, voiceover, voiceover_volume, output_path, progress_callback):
     """Overlay meme captions on top of a user-uploaded video, fitting to a standard 1280x720 frame."""
     progress_callback(task_id, 10, "正在讀取影片檔案...")
     
@@ -289,6 +351,9 @@ def generate_meme_video(task_id, video_path, top_text, bottom_text, output_path,
     
     if clip.audio is not None:
         video = video.with_audio(clip.audio)
+        
+    progress_callback(task_id, 60, "正在進行混音處理...")
+    video = mix_video_audio(video, bg_music, bg_music_volume, voiceover, voiceover_volume)
         
     progress_callback(task_id, 65, "正在進行迷因影片編碼...")
     logger = CustomMoviePyLogger(task_id, progress_callback)
@@ -379,7 +444,7 @@ def process_logo_canvas(logo_path, width=1280, height=720):
         return canvas
 
 
-def generate_logo_intro_video(task_id, logo_path, brand_name, tagline, bg_music_path, output_path, progress_callback):
+def generate_logo_intro_video(task_id, logo_path, brand_name, tagline, bg_music_path, bg_music_volume, voiceover_path, voiceover_volume, output_path, progress_callback):
     """Generate a high-quality logo intro animation with brand text and sweep audio."""
     progress_callback(task_id, 10, "正在加載並處理 Logo 圖片...")
     
@@ -404,14 +469,8 @@ def generate_logo_intro_video(task_id, logo_path, brand_name, tagline, bg_music_
     
     video = CompositeVideoClip([bg, logo_clip, text_clip]).with_duration(5.0)
     
-    if bg_music_path and os.path.exists(bg_music_path):
-        progress_callback(task_id, 50, "正在載入音效並混合...")
-        try:
-            audio = AudioFileClip(bg_music_path)
-            audio = audio.subclipped(0, 5.0).with_effects([AudioFadeOut(1.0)])
-            video = video.with_audio(audio)
-        except Exception as e:
-            print(f"Error loading intro audio: {e}")
+    progress_callback(task_id, 50, "正在進行混音處理...")
+    video = mix_video_audio(video, bg_music_path, bg_music_volume, voiceover_path, voiceover_volume)
             
     progress_callback(task_id, 65, "正在編碼片頭影片...")
     logger = CustomMoviePyLogger(task_id, progress_callback)
@@ -561,7 +620,7 @@ def create_promo_text_overlay(brand_name, product_name, highlight, cta, width=72
     return clip
 
 
-def generate_product_promo_video(task_id, images_paths, brand_name, product_name, highlights, bg_music_path, output_path, progress_callback):
+def generate_product_promo_video(task_id, images_paths, brand_name, product_name, highlights, bg_music_path, bg_music_volume, voiceover_path, voiceover_volume, output_path, progress_callback):
     """Generate a 15-second vertical (720x1280) product promotion video."""
     progress_callback(task_id, 10, "正在讀取並處理商品圖片...")
     
@@ -606,18 +665,8 @@ def generate_product_promo_video(task_id, images_paths, brand_name, product_name
     progress_callback(task_id, 35, "正在合成串聯軌道並剪輯音樂...")
     video = CompositeVideoClip(clips).with_duration(15.0)
     
-    if bg_music_path and os.path.exists(bg_music_path):
-        progress_callback(task_id, 50, "正在剪輯與混音背景音樂...")
-        try:
-            audio = AudioFileClip(bg_music_path)
-            if audio.duration < 15.0:
-                audio = audio.with_effects([AudioLoop(duration=15.0)])
-            else:
-                audio = audio.subclipped(0, 15.0)
-            audio = audio.with_effects([AudioFadeOut(1.0)])
-            video = video.with_audio(audio)
-        except Exception as e:
-            print(f"Error adding audio to promo: {e}")
+    progress_callback(task_id, 50, "正在進行混音處理...")
+    video = mix_video_audio(video, bg_music_path, bg_music_volume, voiceover_path, voiceover_volume)
             
     progress_callback(task_id, 65, "正在開始影片渲染編碼...")
     logger = CustomMoviePyLogger(task_id, progress_callback)
@@ -748,7 +797,7 @@ def create_custom_text_overlay(text_items, width, height, duration):
     return overlay
 
 
-def generate_custom_template_video(task_id, custom_tpl, file_paths, bg_music, output_path, progress_callback):
+def generate_custom_template_video(task_id, custom_tpl, file_paths, bg_music, bg_music_volume, voiceover, voiceover_volume, output_path, progress_callback):
     """
     Renders a custom template video containing multiple user-defined scenes,
     applying zoom animations, text timelines, and background music.
@@ -852,7 +901,7 @@ def generate_custom_template_video(task_id, custom_tpl, file_paths, bg_music, ou
                         base_clip = base_clip.without_audio()
                     elif audio_option == "volume":
                         vol_scale = float(scene.get("audio_volume", 1.0))
-                        base_clip = base_clip.with_audio(base_clip.audio.multiply_volume(vol_scale))
+                        base_clip = base_clip.with_audio(base_clip.audio.with_volume_scaled(vol_scale))
                 
         elif visual_type == "solid_color":
             color_hex = scene.get("color", "#000000")
@@ -924,23 +973,8 @@ def generate_custom_template_video(task_id, custom_tpl, file_paths, bg_music, ou
         else:
             final_video = concatenate_videoclips(clips, method="compose")
     
-    if bg_music and os.path.exists(bg_music):
-        progress_callback(task_id, 80, "正在合成背景音樂...")
-        try:
-            audio = AudioFileClip(bg_music)
-            if audio.duration < final_video.duration:
-                from moviepy.audio.fx.AudioLoop import AudioLoop
-                audio = audio.with_effects([AudioLoop(duration=final_video.duration)])
-            else:
-                audio = audio.subclipped(0, final_video.duration)
-                
-            from moviepy.audio.fx.AudioFadeOut import AudioFadeOut
-            audio = audio.with_effects([AudioFadeOut(1.5)])
-            audio = audio.multiply_volume(0.7)
-            
-            final_video = final_video.with_audio(audio)
-        except Exception as ae:
-            print(f"Error mixing audio in custom template: {ae}")
+    progress_callback(task_id, 80, "正在進行混音處理...")
+    final_video = mix_video_audio(final_video, bg_music, bg_music_volume, voiceover, voiceover_volume)
             
     progress_callback(task_id, 85, "正在啟動自訂影片編碼渲染...")
     logger = CustomMoviePyLogger(task_id, progress_callback)

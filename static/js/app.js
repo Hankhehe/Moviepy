@@ -208,6 +208,42 @@ document.addEventListener('DOMContentLoaded', () => {
                 select.addEventListener('change', () => handleConditionalFields());
                 formGroup.appendChild(select);
             } 
+            else if (field.type === 'range') {
+                const rangeContainer = document.createElement('div');
+                rangeContainer.style.display = 'flex';
+                rangeContainer.style.alignItems = 'center';
+                rangeContainer.style.gap = '1rem';
+                rangeContainer.style.marginTop = '0.2rem';
+                
+                const input = document.createElement('input');
+                input.type = 'range';
+                input.name = field.name;
+                input.min = field.min !== undefined ? field.min : 0;
+                input.max = field.max !== undefined ? field.max : 200;
+                input.step = field.step !== undefined ? field.step : 5;
+                input.value = field.default !== undefined ? field.default : 100;
+                input.className = 'form-input';
+                input.style.flex = '1';
+                input.style.height = '6px';
+                input.style.cursor = 'pointer';
+                input.style.padding = '0';
+                
+                const valueSpan = document.createElement('span');
+                valueSpan.style.fontSize = '0.85rem';
+                valueSpan.style.color = 'var(--accent-color)';
+                valueSpan.style.fontWeight = '700';
+                valueSpan.style.width = '45px';
+                valueSpan.style.textAlign = 'right';
+                valueSpan.innerText = `${input.value}%`;
+                
+                input.addEventListener('input', (e) => {
+                    valueSpan.innerText = `${e.target.value}%`;
+                });
+                
+                rangeContainer.appendChild(input);
+                rangeContainer.appendChild(valueSpan);
+                formGroup.appendChild(rangeContainer);
+            } 
             else if (field.type === 'file') {
                 const dropzone = document.createElement('div');
                 dropzone.className = 'dropzone';
@@ -333,16 +369,24 @@ document.addEventListener('DOMContentLoaded', () => {
         
         selectedTemplate.fields.forEach(field => {
             if (field.conditional) {
-                // Format of conditional: "fieldName=value"
-                const [targetName, targetValue] = field.conditional.split('=');
+                let targetName, targetValue, isEquals;
+                if (field.conditional.includes('!=')) {
+                    [targetName, targetValue] = field.conditional.split('!=');
+                    isEquals = false;
+                } else {
+                    [targetName, targetValue] = field.conditional.split('=');
+                    isEquals = true;
+                }
+                
                 const targetElement = document.querySelector(`[name="${targetName}"]`);
                 const groupElement = document.getElementById(`group_${field.name}`);
-                const fileInputElement = groupElement.querySelector('input[type="file"]');
+                const fileInputElement = groupElement ? groupElement.querySelector('input[type="file"]') : null;
                 
                 if (targetElement && groupElement) {
-                    if (targetElement.value === targetValue) {
+                    const match = isEquals ? (targetElement.value === targetValue) : (targetElement.value !== targetValue);
+                    if (match) {
                         groupElement.style.display = 'block';
-                        if (fileInputElement) fileInputElement.required = true;
+                        if (fileInputElement && field.required) fileInputElement.required = true;
                     } else {
                         groupElement.style.display = 'none';
                         if (fileInputElement) {

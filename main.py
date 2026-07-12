@@ -335,27 +335,26 @@ async def get_templates():
     audio_items = [item for item in db.get("assets", {}).values() if item.get("type") == "audio"]
     audio_items.sort(key=sort_key)
     
-    for info in audio_items:
-        library_audios.append({
-            "value": f"library:{info.get('filename')}",
-            "label": f"🎵 {info.get('name')}"
-        })
-        
-    # Combine library options and the custom upload option
-    music_options = library_audios + [{"value": "custom", "label": "自行上傳音訊檔案 (.mp3/.wav)"}]
-    sound_options = library_audios + [{"value": "custom", "label": "自行上傳音效檔案 (.mp3/.wav)"}]
+     # Combine library options and the custom upload option
+    music_options = [{"value": "none", "label": "🚫 不套用背景音樂 (無音訊)"}] + library_audios + [{"value": "custom", "label": "自行上傳音訊檔案 (.mp3/.wav)"}]
+    sound_options = [{"value": "none", "label": "🚫 不套用片頭音效 (無音訊)"}] + library_audios + [{"value": "custom", "label": "自行上傳音效檔案 (.mp3/.wav)"}]
+    voiceover_options = [{"value": "none", "label": "🚫 無旁白配音 (無音訊)"}] + library_audios + [{"value": "custom", "label": "自行上傳旁白檔案 (.mp3/.wav)"}]
     
     templates = [
         {
             "id": "slideshow",
             "name": "時尚相簿投影片 (Slideshow)",
-            "description": "將多張精美照片以交叉淡入淡出（Crossfade）轉場流暢銜接，並在開頭疊加動態標題字幕，搭配選定之背景音樂，完美演繹故事細節。",
+            "description": "將多張精美照片以交叉淡入淡出（Crossfade）轉場流銜接，並在開頭疊加動態標題字幕，搭配選定之背景音樂，完美演繹故事細節。",
             "preview_url": "/static/templates/slideshow_preview.mp4",
             "fields": [
                 {"name": "title", "label": "相簿標題文字", "type": "text", "placeholder": "例如：我的夏日度假回憶錄", "required": True},
                 {"name": "music", "label": "選擇背景音樂", "type": "select", "options": music_options, "required": True},
-                {"name": "images", "label": "上傳相片 (3-5 張)", "type": "file", "multiple": True, "accept": "image/*", "required": True},
-                {"name": "custom_audio", "label": "上傳自訂音樂檔案", "type": "file", "multiple": False, "accept": "audio/*", "required": False, "conditional": "music=custom"}
+                {"name": "music_volume", "label": "背景音樂音量", "type": "range", "min": 0, "max": 200, "default": 70, "required": False, "conditional": "music!=none"},
+                {"name": "custom_audio", "label": "上傳自訂音樂檔案", "type": "file", "multiple": False, "accept": "audio/*", "required": False, "conditional": "music=custom"},
+                {"name": "voiceover", "label": "選擇旁白配音", "type": "select", "options": voiceover_options, "required": False},
+                {"name": "voiceover_volume", "label": "旁白配音音量", "type": "range", "min": 0, "max": 200, "default": 100, "required": False, "conditional": "voiceover!=none"},
+                {"name": "custom_voiceover", "label": "上傳自訂旁白音檔", "type": "file", "multiple": False, "accept": "audio/*", "required": False, "conditional": "voiceover=custom"},
+                {"name": "images", "label": "上傳相片 (3-5 張)", "type": "file", "multiple": True, "accept": "image/*", "required": True}
             ]
         },
         {
@@ -366,6 +365,12 @@ async def get_templates():
             "fields": [
                 {"name": "top_text", "label": "頂部文字 (Top Caption)", "type": "text", "placeholder": "例如：當我的程式碼一次就跑過", "required": False},
                 {"name": "bottom_text", "label": "底部文字 (Bottom Caption)", "type": "text", "placeholder": "例如：而且沒有任何 Warning", "required": False},
+                {"name": "music", "label": "選擇背景音樂", "type": "select", "options": music_options, "required": False},
+                {"name": "music_volume", "label": "背景音樂音量", "type": "range", "min": 0, "max": 200, "default": 70, "required": False, "conditional": "music!=none"},
+                {"name": "custom_audio", "label": "上傳自訂音樂檔案", "type": "file", "multiple": False, "accept": "audio/*", "required": False, "conditional": "music=custom"},
+                {"name": "voiceover", "label": "選擇旁白配音", "type": "select", "options": voiceover_options, "required": False},
+                {"name": "voiceover_volume", "label": "旁白配音音量", "type": "range", "min": 0, "max": 200, "default": 100, "required": False, "conditional": "voiceover!=none"},
+                {"name": "custom_voiceover", "label": "上傳自訂旁白音檔", "type": "file", "multiple": False, "accept": "audio/*", "required": False, "conditional": "voiceover=custom"},
                 {"name": "video", "label": "上傳影片短片 (MP4, 最多截取前 15 秒)", "type": "file", "multiple": False, "accept": "video/*", "required": True}
             ]
         },
@@ -379,7 +384,11 @@ async def get_templates():
                 {"name": "tagline", "label": "宣傳副標/標語", "type": "text", "placeholder": "例如：探索無限的創意可能", "required": False},
                 {"name": "logo", "label": "上傳 Logo 圖片 (建議透明背景 PNG)", "type": "file", "multiple": False, "accept": "image/*", "required": True},
                 {"name": "sound", "label": "選擇片頭音效", "type": "select", "options": sound_options, "required": True},
-                {"name": "custom_audio", "label": "上傳自訂音效檔案", "type": "file", "multiple": False, "accept": "audio/*", "required": False, "conditional": "sound=custom"}
+                {"name": "music_volume", "label": "片頭音效音量", "type": "range", "min": 0, "max": 200, "default": 70, "required": False, "conditional": "sound!=none"},
+                {"name": "custom_audio", "label": "上傳自訂音效檔案", "type": "file", "multiple": False, "accept": "audio/*", "required": False, "conditional": "sound=custom"},
+                {"name": "voiceover", "label": "選擇旁白配音", "type": "select", "options": voiceover_options, "required": False},
+                {"name": "voiceover_volume", "label": "旁白配音音量", "type": "range", "min": 0, "max": 200, "default": 100, "required": False, "conditional": "voiceover!=none"},
+                {"name": "custom_voiceover", "label": "上傳自訂旁白音檔", "type": "file", "multiple": False, "accept": "audio/*", "required": False, "conditional": "voiceover=custom"}
             ]
         },
         {
@@ -395,7 +404,11 @@ async def get_templates():
                 {"name": "highlight3", "label": "特色/亮點 3", "type": "text", "placeholder": "例如：圓潤杯口 極致手感", "required": True},
                 {"name": "images", "label": "上傳商品圖片 (3-6 張)", "type": "file", "multiple": True, "accept": "image/*", "required": True},
                 {"name": "music", "label": "選擇背景音樂", "type": "select", "options": music_options, "required": True},
-                {"name": "custom_audio", "label": "上傳自訂音樂檔案", "type": "file", "multiple": False, "accept": "audio/*", "required": False, "conditional": "music=custom"}
+                {"name": "music_volume", "label": "背景音樂音量", "type": "range", "min": 0, "max": 200, "default": 70, "required": False, "conditional": "music!=none"},
+                {"name": "custom_audio", "label": "上傳自訂音樂檔案", "type": "file", "multiple": False, "accept": "audio/*", "required": False, "conditional": "music=custom"},
+                {"name": "voiceover", "label": "選擇旁白配音", "type": "select", "options": voiceover_options, "required": False},
+                {"name": "voiceover_volume", "label": "旁白配音音量", "type": "range", "min": 0, "max": 200, "default": 100, "required": False, "conditional": "voiceover!=none"},
+                {"name": "custom_voiceover", "label": "上傳自訂旁白音檔", "type": "file", "multiple": False, "accept": "audio/*", "required": False, "conditional": "voiceover=custom"}
             ]
         }
     ]
@@ -441,13 +454,23 @@ async def get_templates():
                         "required": False
                     })
             
-        # Add background music options
+        # Add background music and voiceover options
         fields.append({
             "name": "music",
             "label": "選擇背景音樂",
             "type": "select",
             "options": music_options,
             "required": True
+        })
+        fields.append({
+            "name": "music_volume",
+            "label": "背景音樂音量",
+            "type": "range",
+            "min": 0,
+            "max": 200,
+            "default": 70,
+            "required": False,
+            "conditional": "music!=none"
         })
         fields.append({
             "name": "custom_audio",
@@ -457,6 +480,32 @@ async def get_templates():
             "accept": "audio/*",
             "required": False,
             "conditional": "music=custom"
+        })
+        fields.append({
+            "name": "voiceover",
+            "label": "選擇旁白配音",
+            "type": "select",
+            "options": voiceover_options,
+            "required": False
+        })
+        fields.append({
+            "name": "voiceover_volume",
+            "label": "旁白配音音量",
+            "type": "range",
+            "min": 0,
+            "max": 200,
+            "default": 100,
+            "required": False,
+            "conditional": "voiceover!=none"
+        })
+        fields.append({
+            "name": "custom_voiceover",
+            "label": "上傳自訂旁白音檔",
+            "type": "file",
+            "multiple": False,
+            "accept": "audio/*",
+            "required": False,
+            "conditional": "voiceover=custom"
         })
         
         custom_previews = db.get("template_previews", {})
@@ -484,6 +533,8 @@ async def get_templates():
     return templates
 
 def get_audio_path(selection: str, custom_file_path: str = None) -> str:
+    if not selection or selection == "none":
+        return None
     if selection == "custom":
         return custom_file_path
     elif selection.startswith("library:"):
@@ -498,15 +549,27 @@ def run_render_in_thread(task_id: str, template_id: str, params: Dict[str, Any],
     output_path = os.path.join(OUTPUT_DIR, output_filename)
     
     try:
+        # Resolve BGM selection with template-specific defaults if 'music' is not provided
+        default_music = "none"
+        if template_id == "slideshow": default_music = "library:ambient.mp3"
+        elif template_id == "intro": default_music = "library:cinematic.mp3"
+        elif template_id == "product_promo": default_music = "library:tech.mp3"
+        elif template_id.startswith("custom_"): default_music = "library:ambient.mp3"
+        
+        music_selection = params.get("music", default_music)
+        bg_music = get_audio_path(music_selection, file_paths.get("custom_audio", None))
+        bg_music_volume = float(params.get("music_volume", 70)) / 100.0
+        
+        voiceover_selection = params.get("voiceover", "none")
+        voiceover_path = get_audio_path(voiceover_selection, file_paths.get("custom_voiceover", None))
+        voiceover_volume = float(params.get("voiceover_volume", 100)) / 100.0
+        
         if template_id == "slideshow":
             images = file_paths.get("images", [])
             title = params.get("title", "")
-            music_selection = params.get("music", "library:ambient.mp3")
             
-            bg_music = get_audio_path(music_selection, file_paths.get("custom_audio", None))
-                
             video_processor.generate_slideshow_video(
-                task_id, images, title, bg_music, output_path, update_task_progress
+                task_id, images, title, bg_music, bg_music_volume, voiceover_path, voiceover_volume, output_path, update_task_progress
             )
             
         elif template_id == "meme":
@@ -515,19 +578,16 @@ def run_render_in_thread(task_id: str, template_id: str, params: Dict[str, Any],
             bottom_text = params.get("bottom_text", "")
             
             video_processor.generate_meme_video(
-                task_id, video_path, top_text, bottom_text, output_path, update_task_progress
+                task_id, video_path, top_text, bottom_text, bg_music, bg_music_volume, voiceover_path, voiceover_volume, output_path, update_task_progress
             )
             
         elif template_id == "intro":
             logo = file_paths.get("logo", "")
             brand_name = params.get("brand_name", "")
             tagline = params.get("tagline", "")
-            sound_selection = params.get("sound", "library:cinematic.mp3")
             
-            bg_music = get_audio_path(sound_selection, file_paths.get("custom_audio", None))
-                
             video_processor.generate_logo_intro_video(
-                task_id, logo, brand_name, tagline, bg_music, output_path, update_task_progress
+                task_id, logo, brand_name, tagline, bg_music, bg_music_volume, voiceover_path, voiceover_volume, output_path, update_task_progress
             )
             
         elif template_id == "product_promo":
@@ -539,12 +599,9 @@ def run_render_in_thread(task_id: str, template_id: str, params: Dict[str, Any],
                 params.get("highlight2", ""),
                 params.get("highlight3", "")
             ]
-            music_selection = params.get("music", "library:tech.mp3")
             
-            bg_music = get_audio_path(music_selection, file_paths.get("custom_audio", None))
-                
             video_processor.generate_product_promo_video(
-                task_id, images, brand_name, product_name, highlights, bg_music, output_path, update_task_progress
+                task_id, images, brand_name, product_name, highlights, bg_music, bg_music_volume, voiceover_path, voiceover_volume, output_path, update_task_progress
             )
             
         elif template_id.startswith("custom_"):
@@ -564,11 +621,8 @@ def run_render_in_thread(task_id: str, template_id: str, params: Dict[str, Any],
                     if param_name in params:
                         text["content"] = params[param_name]
                         
-            music_selection = params.get("music", "library:ambient.mp3")
-            bg_music = get_audio_path(music_selection, file_paths.get("custom_audio", None))
-                
             video_processor.generate_custom_template_video(
-                task_id, custom_tpl, file_paths, bg_music, output_path, update_task_progress
+                task_id, custom_tpl, file_paths, bg_music, bg_music_volume, voiceover_path, voiceover_volume, output_path, update_task_progress
             )
             
         else:
